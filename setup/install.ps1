@@ -112,11 +112,11 @@ function Test-BashIsGitFriendly {
   } catch {
     # where.exe missing or failed — fall through to Get-Command
   }
-  $bash = Get-Command bash -ErrorAction SilentlyContinue
-  if ($bash -and $bash.Source) {
-    $src = "$($bash.Source)".Trim()
-    if ($src -and -not $candidates.Contains($src)) {
-      $candidates.Insert(0, $src)
+  if ($candidates.Count -eq 0) {
+    $bash = Get-Command bash -ErrorAction SilentlyContinue
+    if ($bash -and $bash.Source) {
+      $src = "$($bash.Source)".Trim()
+      if ($src) { [void]$candidates.Add($src) }
     }
   }
   if ($candidates.Count -eq 0) {

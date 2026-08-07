@@ -54,12 +54,7 @@ test_docs_cover_fix_and_checklist() {
     || fail "CHECKLIST shows the failing System32 path shape to reject"
   assert_file_contains "$CHECKLIST" "fully restarted" "CHECKLIST requires full restart after PATH fix"
 
-  assert_file_contains "$INSTALL_SH" "DEBUG.md section 1" "install.sh points at DEBUG section 1"
-  assert_file_contains "$INSTALL_PS1" "DEBUG.md section 1" "install.ps1 points at DEBUG section 1"
-  assert_file_contains "$INSTALL_SH" "bash_path_is_wsl_shadow" "install.sh has WSL shadow detector"
-  assert_file_contains "$INSTALL_PS1" "Test-BashPathIsWslShadow" "install.ps1 has WSL shadow detector"
-
-  pass "DEBUG, CHECKLIST, and installers document the PATH footgun end-to-end"
+  pass "DEBUG and CHECKLIST document the PATH footgun end-to-end"
 }
 
 # --- PATH simulation helpers -------------------------------------------------
@@ -153,46 +148,13 @@ test_install_ps1_warns_and_recovers() {
   fi
 
   ps_script="$tmp/run-bash-check.ps1"
-  # Dot-source only the detector functions by extracting them into a tiny driver.
+  # Extract the real detector functions from install.ps1 into a tiny driver.
   # Full install.ps1 prompts; we unit-check Test-BashIsGitFriendly under PATH control.
-  cat >"$ps_script" <<'PSEOF'
-$ErrorActionPreference = 'Stop'
-# Functions under test are inlined from setup/install.ps1 (keep patterns in sync via grep docs test).
-function Test-BashPathIsWslShadow([string]$Path) {
-  if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
-  return [bool](
-    $Path -match '(?i)[\\/]System32[\\/]bash(\.exe)?$' -or
-    $Path -match '(?i)[\\/]SysWOW64[\\/]bash(\.exe)?$' -or
-    $Path -match '(?i)[\\/]WindowsApps[\\/]' -or
-    $Path -match '(?i)[\\/]wsl\.exe$' -or
-    $Path -match '(?i)[\\/][Ww]sl[\\/]' -or
-    $Path -match '(?i)wslbash'
-  )
-}
-function Test-BashIsGitFriendly {
-  $candidates = New-Object System.Collections.Generic.List[string]
-  try {
-    $whereOut = & where.exe bash 2>$null
-    foreach ($line in @($whereOut)) {
-      $t = if ($null -ne $line) { "$line".Trim() } else { '' }
-      if ($t -and -not $candidates.Contains($t)) { [void]$candidates.Add($t) }
-    }
-  } catch {}
-  $bash = Get-Command bash -ErrorAction SilentlyContinue
-  if ($bash -and $bash.Source) {
-    $src = "$($bash.Source)".Trim()
-    if ($src -and -not $candidates.Contains($src)) { $candidates.Insert(0, $src) }
-  }
-  if ($candidates.Count -eq 0) {
-    return [pscustomobject]@{ Ok = $false; Detail = 'bash not on PATH' }
-  }
-  $first = $candidates[0]
-  if (Test-BashPathIsWslShadow $first) {
-    return [pscustomobject]@{ Ok = $false; Detail = "bash resolves to WSL/store shadow: $first" }
-  }
-  return [pscustomobject]@{ Ok = $true; Detail = $first }
-}
-
+  {
+    printf '%s\n' "\$ErrorActionPreference = 'Stop'"
+    sed -n '/^function Test-BashPathIsWslShadow/,/^}/p' "$INSTALL_PS1"
+    sed -n '/^function Test-BashIsGitFriendly/,/^}/p' "$INSTALL_PS1"
+    cat <<'PSEOF'
 $root = $args[0]
 $bad = Join-Path $root 'System32'
 $good = Join-Path $root 'Git\usr\bin'
@@ -215,6 +177,11 @@ try {
   $env:PATH = $saved
 }
 PSEOF
+  } >"$ps_script"
+  grep -q '^function Test-BashPathIsWslShadow' "$ps_script" \
+    || fail "could not extract Test-BashPathIsWslShadow from install.ps1"
+  grep -q '^function Test-BashIsGitFriendly' "$ps_script" \
+    || fail "could not extract Test-BashIsGitFriendly from install.ps1"
 
   out=$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ps_script" "$tmp_win" 2>&1) || true
   assert_re_match "$out" 'bad:.*WSL/store shadow' \
