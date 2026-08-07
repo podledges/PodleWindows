@@ -75,6 +75,21 @@ function Test-CommandExists([string]$Name) {
   return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+function Test-DefenderExclusion {
+  # Read-only inspection only. Never adds/removes exclusions.
+  try {
+    $pref = Get-MpPreference -ErrorAction Stop
+    $candidates = @($pref.ExclusionPath) + @($pref.ExclusionProcess) | Where-Object { $_ }
+    $hit = $candidates | Where-Object { $_ -match 'no-mistakes' }
+    if ($hit) {
+      return [pscustomobject]@{ Status = 'Present'; Detail = ($hit -join '; ') }
+    }
+    return [pscustomobject]@{ Status = 'Absent'; Detail = 'No exclusion matching "no-mistakes" found' }
+  } catch {
+    return [pscustomobject]@{ Status = 'Unknown'; Detail = "Could not read Defender preferences: $($_.Exception.Message)" }
+  }
+}
+
 function Get-ToolVersion([string]$Name, [string[]]$VersionArgs) {
   if (-not (Test-CommandExists $Name)) { return $null }
   try {
@@ -193,8 +208,7 @@ $tools = @(
   @{ Name = 'codex'; Args = @('--version') },
   @{ Name = 'grok'; Args = @('--version') },
   @{ Name = 'herdr'; Args = @('--version') },
-  @{ Name = 'treehouse'; Args = @('--version') },
-  @{ Name = 'no-mistakes'; Args = @('--version') }
+  @{ Name = 'treehouse'; Args = @('--version') }
 )
 
 Write-Host ''
@@ -211,6 +225,28 @@ foreach ($t in $tools) {
     $missing += $t.Name
   }
 }
+
+Write-Host ''
+Write-Host '=== no-mistakes install gate (Defender-first - do not skip) ===' -ForegroundColor Magenta
+Write-Host '  Step 1 (REQUIRED FIRST): add a Windows Defender exclusion for no-mistakes.exe / its install directory (admin).'
+$defenderCheck = Test-DefenderExclusion
+switch ($defenderCheck.Status) {
+  'Present' { Write-Ok "Defender exclusion detected: $($defenderCheck.Detail)" }
+  'Absent'  { Write-Warn 'No Defender exclusion for no-mistakes detected yet. Add it now before continuing - see setup/DEBUG.md #3.' }
+  default   { Write-Warn "Could not verify Defender exclusion ($($defenderCheck.Detail)). Confirm manually before continuing - see setup/DEBUG.md #3." }
+}
+Write-Log $log "defender-exclusion=$($defenderCheck.Status)"
+Write-Host '  Step 2 (ONLY AFTER Step 1): install or reinstall no-mistakes.'
+$nmVer = Get-ToolVersion 'no-mistakes' @('--version')
+if ($nmVer) {
+  Write-Ok "no-mistakes detected: $nmVer"
+  Write-Log $log "tool no-mistakes=$nmVer"
+} else {
+  Write-Warn 'no-mistakes not detected on PATH.'
+  Write-Warn 'If no-mistakes worked before and is missing now (binary present yesterday, gone today), suspect Defender quarantine: check Get-MpThreatDetection BEFORE reinstalling - see setup/DEBUG.md #3.'
+  Write-Log $log 'tool no-mistakes=MISSING'
+}
+Write-Host '  Full recovery steps: setup/DEBUG.md #3'
 
 $primary = Get-PrimaryChoice -Forced $Primary
 Write-Info "Primary harness choice: $primary"
@@ -246,7 +282,7 @@ Write-Host '  Codex:     official Codex CLI for your account'
 Write-Host '  Grok:      Grok Build CLI + auth'
 Write-Host '  treehouse: firstmate bootstrap or releases'
 Write-Host '  gh:        winget install GitHub.cli'
-Write-Host '  no-mistakes: ADD DEFENDER EXCLUSION FIRST, then install (setup/DEBUG.md)'
+Write-Host '  no-mistakes: see the Defender-first gate above (setup/DEBUG.md #3)'
 
 $shouldApply = $ApplyConfig
 if (-not $shouldApply -and -not $DryRun) {

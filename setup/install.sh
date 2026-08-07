@@ -119,9 +119,24 @@ check_tool codex --version || true
 check_tool grok --version || true
 check_tool herdr --version || true
 check_tool treehouse --version || true
-if ! check_tool no-mistakes --version; then
-  check_tool no-mistakes version || true
-fi
+
+# Read-only inspection only. Never adds/removes exclusions.
+check_defender_exclusion() {
+  if ! command -v powershell.exe >/dev/null 2>&1; then
+    printf 'unknown|powershell.exe not found'
+    return
+  fi
+  local out
+  out=$(powershell.exe -NoProfile -Command "(Get-MpPreference -ErrorAction Stop | ForEach-Object { \$_.ExclusionPath + \$_.ExclusionProcess }) -join '; '" 2>/dev/null) || {
+    printf 'unknown|could not read Defender preferences'
+    return
+  }
+  if printf '%s' "$out" | grep -qi 'no-mistakes'; then
+    printf 'present|%s' "$out"
+  else
+    printf 'absent|no exclusion matching "no-mistakes" found'
+  fi
+}
 
 ask_yn() {
   # $1 prompt  $2 default_no=1
@@ -161,6 +176,30 @@ choose_primary() {
   fi
 }
 
+echo ""
+log "=== no-mistakes install gate (Defender-first — do not skip) ==="
+log "Step 1 (REQUIRED FIRST): add a Windows Defender exclusion for no-mistakes.exe / its install directory (admin)."
+DEFENDER_RESULT=$(check_defender_exclusion)
+DEFENDER_STATUS=${DEFENDER_RESULT%%|*}
+DEFENDER_DETAIL=${DEFENDER_RESULT#*|}
+case "$DEFENDER_STATUS" in
+  present) ok "Defender exclusion detected: $DEFENDER_DETAIL" ;;
+  absent) warn "No Defender exclusion for no-mistakes detected yet. Add it now before continuing — see setup/DEBUG.md #3." ;;
+  *) warn "Could not verify Defender exclusion ($DEFENDER_DETAIL). Confirm manually before continuing — see setup/DEBUG.md #3." ;;
+esac
+echo "defender-exclusion=$DEFENDER_STATUS" >>"$LOG_FILE"
+log "Step 2 (ONLY AFTER Step 1): install or reinstall no-mistakes."
+NM_VER=$(tool_ver no-mistakes --version) || NM_VER=$(tool_ver no-mistakes version) || NM_VER=""
+if [[ -n "$NM_VER" ]]; then
+  ok "no-mistakes detected: $NM_VER"
+  echo "tool no-mistakes=$NM_VER" >>"$LOG_FILE"
+else
+  warn "no-mistakes not detected on PATH."
+  warn "If no-mistakes worked before and is missing now (binary present yesterday, gone today), suspect Defender quarantine: check Get-MpThreatDetection BEFORE reinstalling — see setup/DEBUG.md #3."
+  echo "tool no-mistakes=MISSING" >>"$LOG_FILE"
+fi
+log "Full recovery steps: setup/DEBUG.md #3"
+
 PRIMARY=$(choose_primary)
 log "Primary harness choice: $PRIMARY"
 echo "primary=$PRIMARY" >>"$LOG_FILE"
@@ -196,7 +235,7 @@ echo "  Codex:     official Codex CLI"
 echo "  Grok:      Grok Build CLI + auth"
 echo "  treehouse: firstmate bootstrap or releases"
 echo "  gh:        winget install GitHub.cli"
-echo "  no-mistakes: Defender exclusion FIRST, then install (setup/DEBUG.md)"
+echo "  no-mistakes: see the Defender-first gate above (setup/DEBUG.md #3)"
 
 copy_example() {
   local src=$1 dest=$2
