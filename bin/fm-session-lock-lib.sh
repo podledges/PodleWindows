@@ -85,6 +85,31 @@ fm_harness_process_matches() {  # <comm> <args>
   return 1
 }
 
+# True when harness argument string $1 describes the shared multi-session
+# background daemon (`claude daemon run ...`) rather than any one session.
+# Claude Code hosts every background job on a machine inside one such daemon,
+# so its pid identifies the host, not a session: a lock naming it would make
+# sibling background jobs look like one session and would stay "live" for as
+# long as ANY job keeps the daemon up. Only the tokens immediately after argv0
+# are examined, because a bg-pty-host's argument string embeds the session's
+# own prompt text, which may contain anything - including these words. An argv0
+# containing unquoted spaces defeats the token split; that case degrades to
+# shared-host NOT detected - exactly the pre-detection behavior - never to a
+# false positive.
+fm_harness_args_is_shared_host() {  # <args>
+  local args=$1 rest
+  case "$args" in
+    \"*) rest=${args#\"}; rest=${rest#*\"} ;;
+    \'*) rest=${args#\'}; rest=${rest#*\'} ;;
+    *) rest=${args#*[[:space:]]} ;;
+  esac
+  rest="${rest#"${rest%%[![:space:]]*}"}"
+  case "$rest" in
+    'daemon run'|'daemon run '*) return 0 ;;
+  esac
+  return 1
+}
+
 # Print the real Windows pid backing Cygwin/MSYS2 pid $1, or return 1 when this
 # host has no such mapping (native Linux/macOS, or the pid is gone). Both
 # emulators expose /proc/<pid>/winpid; native Linux and macOS do not, which is
@@ -124,7 +149,10 @@ fm_harness_windows_ancestry_rows() {  # <start-winpid>
 }
 
 # Walk the current process ancestry (up to 16 hops) and print this session's
-# contiguous verified-harness ancestry, innermost pid first.
+# contiguous verified-harness ancestry, innermost first, one row per process:
+# "<pid>\t<kind>", where kind is "session" for an ordinary harness process and
+# "shared-host" for the multi-session background daemon recognized by
+# fm_harness_args_is_shared_host.
 #
 # The walk climbs freely until the first harness match, because the caller is
 # normally an ordinary shell several levels below its session. After that first
@@ -147,8 +175,8 @@ fm_harness_windows_ancestry_rows() {  # <start-winpid>
 # header). If the walk still reaches the top with no match at all, and the last
 # pid it could read has a real Windows pid behind it, the walk continues into
 # the real Windows ancestry above the synthetic boundary.
-fm_harness_ancestry_pids() {
-  local pid=$$ comm args ppid extending=0 printed=0 prev_pid=$$ last_winpid wpid wcomm wargs
+fm_harness_ancestry_rows() {
+  local pid=$$ comm args ppid extending=0 printed=0 prev_pid=$$ kind last_winpid wpid wcomm wargs
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null)
     args=$(ps -o args= -p "$pid" 2>/dev/null)
@@ -163,7 +191,11 @@ fm_harness_ancestry_pids() {
     [ -n "$comm" ] || break
 
     if fm_harness_process_matches "$comm" "$args"; then
-      printf '%s\n' "$pid"
+      kind=session
+      if [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] && fm_harness_args_is_shared_host "$args"; then
+        kind=shared-host
+      fi
+      printf '%s\t%s\n' "$pid" "$kind"
       printed=1
       [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] || break
       extending=1
@@ -186,7 +218,11 @@ fm_harness_ancestry_pids() {
       wcomm="${wcomm%.exe}"
       wargs="${wargs//\\//}"
       if fm_harness_process_matches "$wcomm" "$wargs"; then
-        printf '%s\n' "$wpid"
+        kind=session
+        if [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] && fm_harness_args_is_shared_host "$wargs"; then
+          kind=shared-host
+        fi
+        printf '%s\t%s\n' "$wpid" "$kind"
         printed=1
         [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] || break
         extending=1
@@ -199,20 +235,41 @@ fm_harness_ancestry_pids() {
   [ "$printed" -eq 1 ]
 }
 
+# Pids-only view of the same walk, innermost first, for callers that need the
+# contiguous run's membership rather than one chosen identity.
+fm_harness_ancestry_pids() {
+  local rows
+  rows=$(fm_harness_ancestry_rows) || return 1
+  printf '%s\n' "$rows" | cut -f1
+}
+
 # Print the one pid that identifies this session when the session lock is being
-# WRITTEN: the outermost pid of the contiguous run. That is the pid that lives as
-# long as the session - a Claude worker several levels in is reaped when its hook
-# returns, and a lock naming it would look stale moments later while the session
-# is still running. Every non-Claude harness reports a single pid, so this is its
-# innermost match unchanged.
+# WRITTEN: the outermost pid of the contiguous run that is not the shared
+# background-session daemon. The outermost pid lives as long as the session - a
+# Claude worker several levels in is reaped when its hook returns, and a lock
+# naming it would look stale moments later while the session is still running.
+# But the daemon above a background session both outlives that session and is
+# shared by every sibling background job, so recording it would let siblings
+# claim each other's home and would keep the lock "live" long after the owning
+# session ended; the outermost NON-daemon pid (the session's own pty host or
+# session process) carries exactly the intended lifetime. When the whole run is
+# shared-host processes (a script running directly under the daemon), fall back
+# to the outermost pid unchanged. Every non-Claude harness reports a single
+# session row, so this stays its innermost match.
 fm_harness_ancestry_pid() {
-  local pids pid outermost=''
-  pids=$(fm_harness_ancestry_pids) || return 1
-  while IFS= read -r pid; do
-    [ -n "$pid" ] && outermost=$pid
+  local rows pid kind outermost='' outermost_session=''
+  rows=$(fm_harness_ancestry_rows) || return 1
+  while IFS=$'\t' read -r pid kind; do
+    [ -n "$pid" ] || continue
+    outermost=$pid
+    [ "$kind" = shared-host ] || outermost_session=$pid
   done <<EOF
-$pids
+$rows
 EOF
+  if [ -n "$outermost_session" ]; then
+    printf '%s\n' "$outermost_session"
+    return 0
+  fi
   [ -n "$outermost" ] || return 1
   printf '%s\n' "$outermost"
 }
@@ -261,14 +318,41 @@ fm_harness_pid_alive() {
   fm_harness_winpid_alive "$pid"
 }
 
+# Print "<name>\t<args>" (whitespace-collapsed) for pid $1 so lock diagnostics
+# can say WHO holds a lock instead of a bare pid, or return 1 when the process
+# cannot be read. Reads ps, then /proc (Cygwin ps, see the file header), then
+# the real Windows process table for a pid outside the emulator's pid database.
+fm_harness_pid_describe() {  # <pid>
+  local pid=$1 comm args line
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  comm=$(ps -o comm= -p "$pid" 2>/dev/null)
+  args=$(ps -o args= -p "$pid" 2>/dev/null)
+  if [ -z "$comm" ] && [ -r "/proc/$pid/exename" ]; then
+    comm=$(cat "/proc/$pid/exename" 2>/dev/null)
+    args=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
+    args=${args% }
+  fi
+  if [ -n "$comm" ]; then
+    printf '%s\t%s\n' "$(basename -- "$comm")" "$args"
+    return 0
+  fi
+  line=$(fm_harness_windows_ancestry_rows "$pid" | head -n 1)
+  [ -n "$line" ] || return 1
+  printf '%s\n' "$line" | cut -f2-
+}
+
 # True when state dir $1 holds a session lock whose pid is ANY harness ancestor
 # of the current process: this script runs inside the session that owns the
 # home's fleet lock. Membership is the honest test of that question, because the
 # lock owner sits at an unknown depth in a contiguous Claude run - it is the
 # outermost pid when the hook fires inside the session's own nested worker chain,
-# and an inner pid when a harness-named daemon parents the session. A missing
-# lock, a malformed lock, a lock held by a harness outside this ancestry, or an
-# ancestry that cannot be resolved all fail closed.
+# and an inner pid when a harness-named daemon parents the session. Membership
+# deliberately still includes a shared-host daemon pid even though the write
+# path above never records one anymore: a legacy lock naming the daemon must
+# keep belonging to the session it hosts until that lock naturally cycles, and
+# a hook firing under the daemon chain still proves it runs inside the owning
+# session. A missing lock, a malformed lock, a lock held by a harness outside
+# this ancestry, or an ancestry that cannot be resolved all fail closed.
 fm_session_lock_owned_by_self() {
   local state=$1 lock_pid pids pid
   lock_pid=$(cat "$state/.lock" 2>/dev/null || true)

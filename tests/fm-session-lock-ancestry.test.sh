@@ -220,6 +220,169 @@ SH
   pass "session-lock: a live version-named session holding the lock is not mistaken for a stale owner"
 }
 
+test_shared_daemon_never_identifies_the_session() {
+  local dir fakebin got
+  dir="$TMP_ROOT/shared-daemon"
+  fakebin=$(fm_fakebin "$dir")
+  mkdir -p "$dir/state"
+  # The real background-job shape: shell -> session (--session-id) ->
+  # per-session pty host (--bg-pty-host, whose args embed the session's own
+  # prompt text - here deliberately containing the words "daemon run") ->
+  # shared daemon (daemon run) -> init.
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+field= pid=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) field=$2; shift 2 ;;
+    -p) pid=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+case "$pid:$field" in
+  700:comm=) printf '%s\n' claude ;;
+  700:args=) printf '%s\n' 'claude --session-id abc123 --agent claude' ;;
+  700:ppid=) printf '%s\n' 800 ;;
+  800:comm=) printf '%s\n' claude ;;
+  800:args=) printf '%s\n' 'claude --bg-pty-host pipe 49 37 -- claude daemon run inside prompt text' ;;
+  800:ppid=) printf '%s\n' 600 ;;
+  600:comm=) printf '%s\n' claude ;;
+  600:args=) printf '%s\n' 'claude daemon run --origin transient --spawned-by {"pid":195104}' ;;
+  600:ppid=) printf '%s\n' 1 ;;
+  *:comm=) printf '%s\n' bash ;;
+  *:args=) printf '%s\n' bash ;;
+  *:ppid=) printf '%s\n' 700 ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+
+  got=$(lib_eval "$fakebin" 'fm_harness_ancestry_pid') || fail "the daemon-hosted session was not resolved at all"
+  [ "$got" = 800 ] || fail "the lock write pid must be the outermost per-session process 800, got '$got'"
+  # A legacy lock naming the shared daemon still belongs to the session it
+  # hosts, so a mid-flight library upgrade never orphans a live session.
+  printf '600\n' > "$dir/state/.lock"
+  lib_eval "$fakebin" "fm_session_lock_owned_by_self '$dir/state'" \
+    || fail "a legacy daemon-pid lock was no longer owned by the session under that daemon"
+  printf '800\n' > "$dir/state/.lock"
+  lib_eval "$fakebin" "fm_session_lock_owned_by_self '$dir/state'" \
+    || fail "the per-session pty-host lock was not owned by its own session"
+  # A sibling background job under the SAME daemon writes its own pty-host pid,
+  # which is outside this ancestry: mutual exclusion between siblings.
+  printf '850\n' > "$dir/state/.lock"
+  if lib_eval "$fakebin" "fm_session_lock_owned_by_self '$dir/state'"; then
+    fail "a sibling background job's lock pid was claimed as this session's own"
+  fi
+  lib_eval "$fakebin" 'fm_harness_pid_alive 600' \
+    || fail "the live shared daemon must still count as a live harness for refusal liveness"
+  pass "session-lock: the shared background daemon is never recorded as a session, while legacy daemon locks stay owned"
+}
+
+test_shared_host_detection_reads_only_argv0_adjacent_tokens() {
+  lib_eval "$FAKEBIN" \
+    'fm_harness_args_is_shared_host "claude daemon run --origin transient"' \
+    || fail "a plain daemon-run argument string was not detected"
+  lib_eval "$FAKEBIN" \
+    'fm_harness_args_is_shared_host "\"C:/Program Files/claude/claude.exe\" daemon run --origin transient"' \
+    || fail "a quoted argv0 daemon-run argument string was not detected"
+  if lib_eval "$FAKEBIN" \
+    'fm_harness_args_is_shared_host "claude --bg-pty-host pipe -- claude daemon run in a prompt"'; then
+    fail "prompt text embedded in a pty-host argument string was mistaken for the daemon"
+  fi
+  if lib_eval "$FAKEBIN" 'fm_harness_args_is_shared_host "claude --resume"'; then
+    fail "an ordinary session argument string was mistaken for the daemon"
+  fi
+  pass "session-lock: shared-host detection is anchored to the tokens right after argv0"
+}
+
+test_all_shared_ancestry_falls_back_to_the_outermost_pid() {
+  local dir fakebin got
+  dir="$TMP_ROOT/all-shared"
+  fakebin=$(fm_fakebin "$dir")
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+field= pid=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) field=$2; shift 2 ;;
+    -p) pid=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+case "$pid:$field" in
+  600:comm=) printf '%s\n' claude ;;
+  600:args=) printf '%s\n' 'claude daemon run --origin transient' ;;
+  600:ppid=) printf '%s\n' 1 ;;
+  *:comm=) printf '%s\n' bash ;;
+  *:args=) printf '%s\n' bash ;;
+  *:ppid=) printf '%s\n' 600 ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+  got=$(lib_eval "$fakebin" 'fm_harness_ancestry_pid') \
+    || fail "a script running directly under the daemon lost its harness identity entirely"
+  [ "$got" = 600 ] || fail "with no per-session ancestor the walk must fall back to the outermost pid, got '$got'"
+  pass "session-lock: an all-shared-host ancestry falls back to the pre-detection outermost pid"
+}
+
+test_lock_refusal_describes_the_live_holder() {
+  local dir fakebin live out rc
+  dir="$TMP_ROOT/refusal-describe"
+  fakebin=$(fm_fakebin "$dir")
+  mkdir -p "$dir/state"
+  sleep 60 &
+  live=$!
+  # The fake table maps the genuinely live pid to the shared daemon and gives
+  # this process an unrelated session ancestry, so the real fm-lock.sh reaches
+  # its refusal path with a live, describable holder.
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+field= pid=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) field=$2; shift 2 ;;
+    -p) pid=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ "$pid" = "${FM_TEST_DAEMON_PID:-}" ]; then
+  case "$field" in
+    comm=) printf '%s\n' claude ;;
+    args=) printf '%s\n' 'claude daemon run --origin transient --spawned-by {"pid":42}' ;;
+    ppid=) printf '%s\n' 1 ;;
+  esac
+  exit 0
+fi
+case "$pid:$field" in
+  650:comm=) printf '%s\n' claude ;;
+  650:args=) printf '%s\n' claude ;;
+  650:ppid=) printf '%s\n' 1 ;;
+  *:comm=) printf '%s\n' bash ;;
+  *:args=) printf '%s\n' bash ;;
+  *:ppid=) printf '%s\n' 650 ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+  printf '%s\n' "$live" > "$dir/state/.lock"
+
+  out=$(PATH="$fakebin:$PATH" FM_TEST_DAEMON_PID="$live" FM_STATE_OVERRIDE="$dir/state" \
+    "$ROOT/bin/fm-lock.sh" 2>&1)
+  rc=$?
+  expect_code 1 "$rc" "a live holder must still refuse the acquire"
+  assert_contains "$out" "another live firstmate session holds the lock" "the stable refusal line changed"
+  assert_contains "$out" "holder: claude -- claude daemon run" "the refusal did not describe the holder process"
+  assert_contains "$out" "shared background-session daemon" "the refusal did not name the daemon-held legacy case"
+
+  out=$(PATH="$fakebin:$PATH" FM_TEST_DAEMON_PID="$live" FM_STATE_OVERRIDE="$dir/state" \
+    "$ROOT/bin/fm-lock.sh" status 2>&1) || fail "status must always exit 0"
+  kill "$live" 2>/dev/null
+  assert_contains "$out" "lock: held by live harness pid" "status lost its holder line"
+  assert_contains "$out" "holder: claude -- claude daemon run" "status did not describe the holder process"
+  pass "session-lock: a refusal and status both describe who holds the lock"
+}
+
 # --- end-to-end layer: the real Stop auto-arm in real process trees ----------
 
 install_autoarm_scripts() {
@@ -354,10 +517,66 @@ test_e2e_daemon_parented_version_named_session_keeps_its_lock() {
   pass "session-lock e2e: a version-named session under a harness-named daemon keeps its own lock"
 }
 
+# The real background-job daemon carries argv "claude daemon run ...", unlike
+# the plain script-parented daemons above. A session under it that runs the
+# REAL fm-lock.sh must record its own pid, never the shared daemon's.
+test_e2e_real_daemon_argv_records_the_session_not_the_daemon() {
+  local dir i session_pid daemon_pid lock_after
+  dir="$TMP_ROOT/e2e-daemon-argv"
+  make_primary_home "$dir"
+  # Invoked as `claude daemon run` via PATH so ps reports exactly the real
+  # daemon's argv shape; the script itself ignores its "run" argument.
+  cat > "$dir/daemon" <<'SH'
+#!/usr/bin/env bash
+i=0
+while [ "$i" -lt 200 ] && [ "$(ps -o ppid= -p $$ 2>/dev/null | tr -d ' ')" != 1 ]; do
+  sleep 0.05
+  i=$((i + 1))
+done
+printf '%s\n' "$$" > "$FM_HOME/state/daemon-pid"
+"$FM_SESSION_BIN" "$FM_HOME/session-lock.sh"
+exit 0
+SH
+  cat > "$dir/session-lock.sh" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$$" > "$FM_HOME/state/session-pid"
+rm -f "$FM_HOME/state/.lock"
+"$FM_HOME/bin/fm-lock.sh" > "$FM_HOME/state/hook.out" 2>&1
+printf '%s\n' "$?" > "$FM_HOME/state/hook.rc"
+SH
+  chmod +x "$dir/daemon" "$dir/session-lock.sh"
+
+  FM_HOME="$dir" FM_SESSION_BIN="$NAMED_CLAUDE" PATH="$dir:$PATH" \
+    bash -c '"$0" daemon run &' "$NAMED_CLAUDE"
+  i=0
+  while [ "$i" -lt 400 ] && [ ! -s "$dir/state/hook.rc" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  [ -s "$dir/state/hook.rc" ] || fail "the fixture session never finished acquiring"
+
+  session_pid=$(tr -d '[:space:]' < "$dir/state/session-pid")
+  daemon_pid=$(tr -d '[:space:]' < "$dir/state/daemon-pid")
+  lock_after=$(tr -d '[:space:]' < "$dir/state/.lock")
+  expect_code 0 "$(hook_rc "$dir")" "fm-lock.sh must acquire inside a daemon-hosted session"
+  [ -n "$daemon_pid" ] && [ "$session_pid" != "$daemon_pid" ] \
+    || fail "fixture did not produce a distinct daemon and session: session=$session_pid daemon=$daemon_pid"
+  [ "$lock_after" != "$daemon_pid" ] \
+    || fail "the session lock recorded the shared daemon pid $daemon_pid"
+  [ "$lock_after" = "$session_pid" ] \
+    || fail "the session lock moved off the session: expected $session_pid, got $lock_after"
+  pass "session-lock e2e: under a real daemon-run argv host the lock records the session, not the daemon"
+}
+
 test_version_named_session_is_identified_on_both_platforms
 test_ordinary_paths_are_never_harness_processes
 test_harness_beyond_a_gap_never_owns_the_lock
 test_competing_version_named_session_is_seen_as_live
+test_shared_daemon_never_identifies_the_session
+test_shared_host_detection_reads_only_argv0_adjacent_tokens
+test_all_shared_ancestry_falls_back_to_the_outermost_pid
+test_lock_refusal_describes_the_live_holder
 test_e2e_version_named_session_claims_the_home
 test_e2e_daemon_parented_session_claims_the_home
 test_e2e_daemon_parented_version_named_session_keeps_its_lock
+test_e2e_real_daemon_argv_records_the_session_not_the_daemon

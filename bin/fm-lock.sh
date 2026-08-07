@@ -23,13 +23,38 @@ mkdir -p "$STATE" 2>/dev/null || {
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
 
+# Describe live lock holder $1 in captain-readable terms, so a refusal names
+# the competing session instead of leaving a bare pid to forensics. Best
+# effort: an unreadable holder prints nothing and the refusal stands as is.
+describe_holder() {  # <pid>
+  local line name args
+  line=$(fm_harness_pid_describe "$1") || return 0
+  IFS=$'\t' read -r name args <<EOF
+$line
+EOF
+  if fm_harness_args_is_shared_host "$args"; then
+    printf 'holder: %s -- %s\n' "$name" "$args"
+    printf 'holder hint: that pid is the shared background-session daemon (a legacy-format lock), so the lock belongs to a background job it hosts; finish or delete that background job to free the lock\n'
+    return 0
+  fi
+  if [ "${#args}" -gt 220 ]; then args="${args:0:220}..."
+  fi
+  printf 'holder: %s -- %s\n' "$name" "$args"
+  printf 'holder hint: close or finish that session (an open background job counts as live even after its work is done) to free the lock\n'
+}
+
 if [ "${1:-}" = "status" ]; then
   if [ ! -f "$LOCK" ]; then echo "lock: free"; exit 0; fi
   old=$(cat "$LOCK" 2>/dev/null) || {
     echo "lock: unreadable"
     exit 0
   }
-  if fm_harness_pid_alive "$old"; then echo "lock: held by live harness pid $old"; else echo "lock: stale (pid $old dead or not a harness)"; fi
+  if fm_harness_pid_alive "$old"; then
+    echo "lock: held by live harness pid $old"
+    describe_holder "$old"
+  else
+    echo "lock: stale (pid $old dead or not a harness)"
+  fi
   exit 0
 fi
 
@@ -63,6 +88,7 @@ if [ -f "$LOCK" ] && [ ! -L "$LOCK" ]; then
   fi
   if fm_harness_pid_alive "$old"; then
     echo "error: another live firstmate session holds the lock (pid $old); operate read-only until resolved" >&2
+    describe_holder "$old" >&2
     exit 1
   fi
 fi
@@ -88,6 +114,7 @@ if [ -e "$LOCK" ] || [ -L "$LOCK" ]; then
   }
   if [ "$old" != "$me" ] && fm_harness_pid_alive "$old"; then
     echo "error: another live firstmate session holds the lock (pid $old); operate read-only until resolved" >&2
+    describe_holder "$old" >&2
     exit 1
   fi
 fi
