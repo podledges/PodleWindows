@@ -87,11 +87,12 @@ Both branches keep `config/backend` = `herdr` unless you override.
 1. Discovers the firstmate **home** as the parent of `setup/` (no hardcoded user paths).
 2. Checks that `AGENTS.md` exists there.
 3. Warns if `bash` looks like WSL instead of Git Bash.
-4. Asks the **primary prompt** (unless `-Primary pi|claude` / `--primary=`).
-5. Detects tools on `PATH` (and common install roots via env vars only).
-6. Offers best-effort install hints / optional npm globals (never silent force-overwrite of your configs).
-7. Writes missing config from examples after confirm (or `-ApplyConfig` / `--apply-config`).
-8. Prints the auth checklist and log path.
+4. Detects tools on `PATH` (and common install roots via env vars only).
+5. Presents the **no-mistakes install gate** (Defender-first, in dry-run and real runs alike): checks read-only whether a Defender exclusion for no-mistakes exists (never adds/removes one), states exclusion-before-install ordering, then checks for no-mistakes — flagging a previously-working-now-missing binary as a likely quarantine ([DEBUG.md](DEBUG.md) §3).
+6. Asks the **primary prompt** (unless `-Primary pi|claude` / `--primary=`).
+7. Offers best-effort install hints / optional npm globals (never silent force-overwrite of your configs).
+8. Writes missing config from examples after confirm (or `-ApplyConfig` / `--apply-config`).
+9. Prints the auth checklist and log path.
 
 **Not automated (you must do these):** vendor logins, Herdr license/install UI, Pi project trust, Windows Defender exclusion (admin), full PATH reorder + restart.
 
