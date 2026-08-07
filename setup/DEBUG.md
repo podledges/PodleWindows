@@ -4,12 +4,15 @@ Windows-first. Paths are patterns and commands, not one user’s profile.
 
 ## 1. Git Bash must beat WSL on PATH (common footgun)
 
+The installer (`install.ps1` / `install.sh`) warns early when `bash` resolves to the WSL launcher (`System32\bash.exe`, Store/`WindowsApps` shim, or other WSL-branded hit) and points here. Do not ignore that WARN — later failures look unrelated.
+
 ### Symptom
 
 - `bash` is WSL, not Git for Windows
 - Firstmate / Herdr / treehouse / hooks misbehave
 - Scripts that expect MSYS paths fail oddly
-- `which bash` → something under WSL or `System32`
+- `which bash` / first `where.exe bash` → `System32\bash.exe`, `WindowsApps`, or WSL
+- Installer: any `WARN` mentioning `WSL/store shadow` (`bash looks like WSL/store shadow`, `bash resolves to WSL/store shadow`, or `Windows PATH resolves bash to WSL/store shadow`)
 
 ### Fix
 
@@ -17,23 +20,37 @@ Windows-first. Paths are patterns and commands, not one user’s profile.
 2. Move **Git for Windows** entries **above** WSL-related entries:
    - Keep high: `...\Git\cmd`, `...\Git\bin`, `...\Git\usr\bin`
    - Below those: WSL, or anything that ships a competing `bash.exe`
-3. **Fully restart** every terminal, IDE, Herdr, and agent host after changing PATH.  
-   Old processes keep the old PATH. A single `hash -r` is not enough for the whole stack.
-4. Verify in a **new** Git Bash:
+3. **Fully restart** every process that caches PATH after the change:
+   - every terminal window/tab
+   - the IDE (VS Code / Cursor / etc.)
+   - Herdr
+   - every agent host (Pi, Claude, Codex, Grok, firstmate session)
+   - Old processes keep the old PATH. A single `hash -r` is **not** enough for the whole stack.
+4. Verify in a **new** shell (Git Bash and/or PowerShell):
 
 ```sh
 which bash
-bash --version
 command -v bash
-# Expect Git for Windows / MSYS bash, not WSL
+bash --version | head -1
+# Expect Git for Windows / MSYS path shape, e.g.:
+#   /usr/bin/bash
+#   /c/Program Files/Git/usr/bin/bash
+#   /c/Program Files/Git/bin/bash
+# NOT: /c/Windows/System32/bash.exe or WindowsApps / WSL paths
 ```
 
 ```powershell
-Get-Command bash | Format-List *
 where.exe bash
+Get-Command bash | Select-Object -ExpandProperty Source
+# Expect first hit like:
+#   C:\Program Files\Git\usr\bin\bash.exe
+#   C:\Program Files\Git\bin\bash.exe
+# NOT first: C:\Windows\System32\bash.exe, SysWOW64, WindowsApps, wsl.exe
 ```
 
-If `where.exe bash` lists WSL first, reorder PATH again and restart.
+If `where.exe bash` still lists WSL/`System32` first, reorder PATH again and restart everything in step 3.
+
+CHECKLIST.md §A1 is the operator checkbox for this verification.
 
 ---
 

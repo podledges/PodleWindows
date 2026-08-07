@@ -73,17 +73,57 @@ if [[ ! -f "$AGENTS_MD" ]]; then
 fi
 ok "Firstmate home: $HOME_DIR"
 
-# bash identity
-BASH_PATH=$(command -v bash || true)
-if [[ -z "$BASH_PATH" ]]; then
-  warn "bash not on PATH"
-elif printf '%s' "$BASH_PATH" | grep -Eqi 'System32/bash|WindowsApps|wsl'; then
-  warn "bash looks like WSL/store shadow: $BASH_PATH"
-  warn "Move Git for Windows above WSL on PATH, then FULLY restart. See setup/DEBUG.md"
-  echo "bash warn: $BASH_PATH" >>"$LOG_FILE"
-else
-  ok "bash: $BASH_PATH"
-fi
+# bash identity — WSL/store launcher on PATH is the common Windows footgun.
+# Prefer where.exe (true Windows PATH order) when present: Git Bash's own
+# command -v is MSYS-prefixed and can hide a WSL-first Windows PATH.
+bash_path_is_wsl_shadow() {
+  local p
+  p=$(printf '%s' "$1" | tr '\\' '/')
+  printf '%s' "$p" | grep -Eqi \
+    '/System32/bash(\.exe)?$|/SysWOW64/bash(\.exe)?$|/WindowsApps/|/wsl\.exe$|/[Ww]sl/|wslbash'
+}
+
+check_bash_identity() {
+  local warned=0 bash_path win_bash
+
+  bash_path=$(command -v bash 2>/dev/null || true)
+  if [[ -z "$bash_path" ]]; then
+    warn "bash not on PATH"
+    echo "bash warn: not on PATH" >>"$LOG_FILE"
+  elif bash_path_is_wsl_shadow "$bash_path"; then
+    warn "bash looks like WSL/store shadow: $bash_path"
+    warned=1
+  fi
+
+  if command -v where.exe >/dev/null 2>&1; then
+    win_bash=$(where.exe bash 2>/dev/null | head -n 1 | tr -d '\r' || true)
+    if [[ -n "$win_bash" ]] && bash_path_is_wsl_shadow "$win_bash"; then
+      if [[ "$warned" -eq 0 ]]; then
+        warn "Windows PATH resolves bash to WSL/store shadow: $win_bash"
+      fi
+      warned=1
+    elif [[ -n "$win_bash" && "$warned" -eq 0 ]]; then
+      ok "bash (Windows PATH): $win_bash"
+      echo "bash ok: $win_bash" >>"$LOG_FILE"
+      return 0
+    fi
+  fi
+
+  if [[ "$warned" -eq 1 ]]; then
+    warn "Move Git for Windows above WSL on PATH, then FULLY restart terminals/IDE/Herdr/agents."
+    warn "See setup/DEBUG.md section 1 (Git Bash must beat WSL)."
+    echo "bash warn: wsl-shadow${bash_path:+ command-v=$bash_path}${win_bash:+ where=$win_bash}" >>"$LOG_FILE"
+    return 1
+  fi
+
+  if [[ -n "$bash_path" ]]; then
+    ok "bash: $bash_path"
+    echo "bash ok: $bash_path" >>"$LOG_FILE"
+  fi
+  return 0
+}
+
+check_bash_identity || true
 
 tool_ver() {
   local name=$1; shift

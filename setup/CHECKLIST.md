@@ -5,9 +5,40 @@ Check boxes in your notes; this file is a template (safe to copy).
 
 ## A. Host prerequisites
 
-- [ ] Windows terminal fully restarted after any PATH change
-- [ ] `bash` is **Git Bash**, not WSL (`which bash` / `where.exe bash`) — see DEBUG.md §1
-- [ ] Git for Windows is **above** WSL on user/system Path
+### A1. `bash` is Git Bash (not WSL) — see DEBUG.md §1
+
+Run these in a **new** terminal after any PATH change (old processes cache PATH):
+
+```sh
+which bash
+command -v bash
+bash --version | head -1
+# Expect a Git for Windows / MSYS path shape, for example:
+#   /usr/bin/bash
+#   /c/Program Files/Git/usr/bin/bash
+#   /c/Program Files/Git/bin/bash
+# NOT:
+#   /c/Windows/System32/bash.exe
+#   .../WindowsApps/...
+#   anything WSL-branded
+```
+
+```powershell
+where.exe bash
+Get-Command bash | Select-Object -ExpandProperty Source
+# Expect the *first* hit under Git for Windows, for example:
+#   C:\Program Files\Git\usr\bin\bash.exe
+#   C:\Program Files\Git\bin\bash.exe
+# NOT first:
+#   C:\Windows\System32\bash.exe
+#   C:\Windows\SysWOW64\bash.exe
+#   ...\WindowsApps\...
+#   ...\wsl.exe
+```
+
+- [ ] `which bash` / first `where.exe bash` hit matches a **Git for Windows** path shape (`...\Git\...` or Git Bash `/usr/bin/bash`)
+- [ ] Git for Windows entries sit **above** WSL on user and/or system Path
+- [ ] Every terminal, IDE, Herdr, and agent host was **fully restarted** after the PATH fix (not just `hash -r`)
 - [ ] Node.js + npm available (`node -v`, `npm -v`)
 - [ ] Running commands from firstmate home (`AGENTS.md` + `setup/` both present)
 
