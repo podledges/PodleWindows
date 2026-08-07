@@ -172,8 +172,11 @@ test_existing_config_not_overwritten_without_confirm() {
 }
 
 test_ps1_maps_same_examples() {
-  # PowerShell installer is exercised statically here: same example mapping as install.sh.
-  # Full PS runtime write tests are covered by install.sh behavior + dry-run operator checks.
+  # Intentional tradeoff: static source cross-check, not a behavioral run.
+  # The guarded risk is example-file-list drift between install.sh and install.ps1;
+  # install.sh already has behavioral coverage above, and invoking powershell.exe
+  # from this bash suite would platform-couple the tests for marginal gain.
+  # Deeper cross-checks belong to the issue #6 smoke script.
   local ps1="$ROOT/setup/install.ps1"
   grep -Fq 'crew-harness.example' "$ps1" || fail "install.ps1 missing pi harness example"
   grep -Fq 'crew-harness.claude.example' "$ps1" || fail "install.ps1 missing claude harness example"
