@@ -57,7 +57,7 @@ Then finish **interactive logins** (script cannot do these for you) and open you
 
 The installer asks:
 
-> Do you have a lot of GPT usage remaining, **or** little/no Claude usage left?
+> Do you have a lot of GPT usage remaining, or little/no Claude usage left?
 
 | Your answer | `config/crew-harness` | Why |
 |---|---|---|
