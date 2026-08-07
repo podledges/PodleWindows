@@ -224,13 +224,41 @@ fm_pr_file_mode() {
 # MSYS/Git Bash mounts surface a stuck owner-execute bit that chmod cannot
 # clear, so a private 600 expectation must also accept its owner-execute
 # variant 700 there. Both are owner-only; the privacy boundary is identical.
-# Exact match everywhere else.
+# On noacl mounts chmod is completely inert (every file reads 644, or 755
+# under the execute heuristic), so after PROVING inertness with a scratch
+# probe the mount's synthetic modes are accepted too: there the POSIX mode
+# carries no boundary at all and the user-profile ACL is the real protection,
+# while the byte-identity, symlink, device, and link-count checks stay fully
+# in force. Exact match everywhere else; a mount where chmod works keeps the
+# strict check so a genuinely mis-permissioned file still fails closed.
 fm_pr_mode_private_matches() {  # <actual> <expected>
   [ "$1" = "$2" ] && return 0
   case "$(uname)" in
-    MSYS*|MINGW*|CYGWIN*) [ "$2" = 600 ] && [ "$1" = 700 ] ;;
+    MSYS*|MINGW*|CYGWIN*) : ;;
     *) return 1 ;;
   esac
+  [ "$2" = 600 ] && [ "$1" = 700 ] && return 0
+  fm_pr_win_chmod_inert || return 1
+  case "$2:$1" in
+    600:644|700:755) return 0 ;;
+  esac
+  return 1
+}
+
+fm_pr_win_chmod_inert() {
+  local probe mode
+  if [ -z "${FM_PR_WIN_CHMOD_INERT_CACHE:-}" ]; then
+    probe=$(mktemp "${STATE:-${TMPDIR:-/tmp}}/.fm-mode-probe.XXXXXX" 2>/dev/null) \
+      || probe=$(mktemp 2>/dev/null) || return 1
+    chmod 600 "$probe" 2>/dev/null
+    mode=$(fm_pr_file_mode "$probe")
+    rm -f -- "$probe"
+    case "$mode" in
+      600|700) FM_PR_WIN_CHMOD_INERT_CACHE=no ;;
+      *) FM_PR_WIN_CHMOD_INERT_CACHE=yes ;;
+    esac
+  fi
+  [ "$FM_PR_WIN_CHMOD_INERT_CACHE" = yes ]
 }
 
 fm_pr_file_device() {
