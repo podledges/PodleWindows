@@ -80,6 +80,9 @@ function Test-DefenderExclusion {
   try {
     $pref = Get-MpPreference -ErrorAction Stop
     $candidates = @($pref.ExclusionPath) + @($pref.ExclusionProcess) | Where-Object { $_ }
+    if ($candidates | Where-Object { $_ -match 'administrator to view exclusions' }) {
+      return [pscustomobject]@{ Status = 'Unknown'; Detail = 'Defender hides exclusions from non-admin sessions; re-check from an elevated shell' }
+    }
     $hit = $candidates | Where-Object { $_ -match 'no-mistakes' }
     if ($hit) {
       return [pscustomobject]@{ Status = 'Present'; Detail = ($hit -join '; ') }

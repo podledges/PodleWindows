@@ -171,8 +171,14 @@ check_defender_exclusion() {
     printf 'unknown|could not read Defender preferences'
     return
   }
+  if printf '%s' "$out" | grep -qi 'administrator to view exclusions'; then
+    printf 'unknown|Defender hides exclusions from non-admin sessions; re-check from an elevated shell'
+    return
+  fi
   if printf '%s' "$out" | grep -qi 'no-mistakes'; then
-    printf 'present|%s' "$out"
+    local hit
+    hit=$(printf '%s' "$out" | tr ';' '\n' | sed -e 's/^ *//' -e 's/ *$//' | grep -i 'no-mistakes' | paste -sd ';' -)
+    printf 'present|%s' "$hit"
   else
     printf 'absent|no exclusion matching "no-mistakes" found'
   fi
