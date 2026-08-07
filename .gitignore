@@ -9,4 +9,6 @@ data/
 __pycache__/
 *.pyc
 .env
-config/
+/config/
+# Track packaged examples under setup/ (not the private home config/)
+!/setup/config/

@@ -1,0 +1,15 @@
+# Captain preferences
+
+## Crew dispatch / prompt-specified workers
+
+- When a task or prompt names a worker runtime (Grok, Claude, Codex, Pi, etc.), honor that as an explicit per-task harness override at intake.
+- Preferred phrase shapes: `use grok`, `run on grok`, `harness=grok`, `send this to codex`, same pattern for other verified harnesses.
+- Do not use Claude Code built-in Agent/Task subagents for fleet work; Firstmate spawns isolated workers via the normal dispatch path.
+- Antigravity CLI (`agy`) is not a Firstmate-verified harness until added to spawn adapters — do not put it in `config/crew-dispatch.json`.
+- Grok dispatch requires the Grok Build CLI on PATH and authenticated; missing binary is a blocker, not a silent fallback to Claude.
+
+## Communication & Response Style
+
+- **Convenient & Accessible Breakdown**: Start with a concise, plain-English TL;DR/summary. Break complex engineering or setup tasks into step-by-step, easy-to-digest pieces.
+- **Uncompromising Truthfulness**: Direct, evidence-backed facts. Always highlight caveats, trade-offs, edge cases, and hard realities without hand-waving or generic AI fluff.
+- **Scannable Layout**: Use clear headings, bulleted action items, and copy-pasteable blocks so information is effortless to absorb.

@@ -1,0 +1,104 @@
+# PODLES setup checklist
+
+Work top to bottom after `setup/install.ps1` or `setup/install.sh`.  
+Check boxes in your notes; this file is a template (safe to copy).
+
+## A. Host prerequisites
+
+- [ ] Windows terminal fully restarted after any PATH change
+- [ ] `bash` is **Git Bash**, not WSL (`which bash` / `where.exe bash`) — see DEBUG.md §1
+- [ ] Git for Windows is **above** WSL on user/system Path
+- [ ] Node.js + npm available (`node -v`, `npm -v`)
+- [ ] Running commands from firstmate home (`AGENTS.md` + `setup/` both present)
+
+## B. Tools on PATH
+
+Run and confirm each prints a version (not “not found”):
+
+```sh
+pi --version
+claude --version
+codex --version
+grok --version
+herdr --version
+gh --version
+treehouse --version
+no-mistakes --version 2>/dev/null || no-mistakes version
+node -v
+npm -v
+jq --version
+```
+
+- [ ] Pi
+- [ ] Claude Code
+- [ ] Codex
+- [ ] Grok Build CLI
+- [ ] Herdr
+- [ ] gh
+- [ ] treehouse
+- [ ] no-mistakes (only after Defender exclusion — DEBUG.md §3)
+- [ ] jq
+- [ ] axi helpers optional but recommended: `gh-axi`, `tasks-axi`, `quota-axi`, `lavish-axi`
+
+## C. Auth (interactive — script cannot finish these)
+
+- [ ] `gh auth login` (and `gh auth status` clean)
+- [ ] Claude Code logged in / subscription active
+- [ ] Codex CLI logged in
+- [ ] Grok CLI authenticated
+- [ ] Herdr installed and usable (`herdr status`)
+- [ ] Pi can start in the home
+
+## D. Firstmate home config
+
+- [ ] `config/backend` → `herdr`
+- [ ] `config/crew-harness` → `pi` **or** `claude` (matches your installer answer)
+- [ ] `config/crew-dispatch.json` present (from example; defaults match primary choice)
+- [ ] `data/captain.md` present (example or your prefs)
+- [ ] No secrets committed; `.env` only if you opt into Relay later
+
+Primary choice reminder:
+
+| Situation | crew-harness |
+|---|---|
+| Lots of GPT left / little Claude left | `pi` |
+| Claude usage available / prefer subscription | `claude` |
+
+## E. no-mistakes (if you ship with the gate)
+
+- [ ] Defender **exclusion added first** (admin)
+- [ ] no-mistakes installed after exclusion
+- [ ] Daemon starts and stays up
+- [ ] `Get-MpThreatDetection` shows no fresh quarantine after start
+
+## F. Primary session smoke
+
+### If primary is Pi
+
+- [ ] `cd` home → `pi`
+- [ ] Project trust approved (or `-e` fallback from README)
+- [ ] Session start is **not** read-only
+- [ ] Watch / turnend extensions loaded (no “not loaded” banner)
+
+### If primary is Claude
+
+- [ ] `cd` home → `claude`
+- [ ] Folder trust + bypass-permissions handled (DEBUG.md §5)
+- [ ] Session start healthy
+
+## G. Crew smoke
+
+- [ ] Ask firstmate for a trivial check (e.g. bearings / status) 
+- [ ] Optional: `use grok` on a tiny read-only question — worker appears in Herdr
+- [ ] Optional: `use codex` / `use claude` / `use pi` phrase routing works
+- [ ] No double-send after a flaky fm-send (read pane first — DEBUG.md §9)
+
+## H. Done when
+
+- [ ] You can open the home, talk to one primary agent, and it can see Herdr + dispatch workers
+- [ ] DEBUG.md bookmarked for PATH / Defender / trust issues
+- [ ] Install log kept if the script wrote one (temp `podles-setup-*.log`)
+
+---
+
+**Stop and open DEBUG.md** if any of: wrong bash, Defender quarantine, Pi read-only, Claude instant exit, Herdr missing workers.

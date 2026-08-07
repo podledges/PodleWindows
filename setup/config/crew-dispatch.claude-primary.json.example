@@ -1,0 +1,43 @@
+{
+  "rules": [
+    {
+      "when": "The captain or task text explicitly requests Grok, the Grok CLI, harness=grok, or wording like 'send this to grok' / 'run on grok' / 'grok subagent'.",
+      "use": { "harness": "grok", "effort": "high" },
+      "why": "Prompt-specified Grok override. Requires the Grok Build CLI installed and authenticated."
+    },
+    {
+      "when": "The captain or task text explicitly requests Codex, harness=codex, or wording like 'send this to codex' / 'run on codex'.",
+      "use": { "harness": "codex", "model": "gpt-5.5", "effort": "high" },
+      "why": "Prompt-specified Codex override."
+    },
+    {
+      "when": "The captain or task text explicitly requests Claude, Claude Code, harness=claude, or wording like 'send this to claude' / 'run on claude' (and does not name Fable/Haiku).",
+      "use": { "harness": "claude", "model": "fable", "effort": "high" },
+      "why": "Prompt-specified Claude override defaults to Fable."
+    },
+    {
+      "when": "The captain or task text explicitly requests Pi, harness=pi, or wording like 'send this to pi' / 'run on pi'.",
+      "use": { "harness": "pi", "model": "gpt-5.5", "effort": "medium" },
+      "why": "Prompt-specified Pi override."
+    },
+    {
+      "when": "The task is high-complexity technical or product design: architecture decisions, gnarly debugging, or work where depth and creativity matter more than speed.",
+      "use": { "harness": "claude", "model": "fable", "effort": "high" },
+      "why": "Ration Claude quota for high-complexity design (Fable)."
+    },
+    {
+      "when": "The task is a trivial mechanical edit such as a rote rename, formatting sweep, targeted typo fix, or simple file gathering.",
+      "use": { "harness": "claude", "model": "haiku", "effort": "low" },
+      "why": "Cheapest fast profile for narrow, low-ambiguity work."
+    },
+    {
+      "when": "The task is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.",
+      "use": [
+        { "harness": "claude", "model": "fable", "effort": "high" },
+        { "harness": "pi", "model": "gpt-5.5", "effort": "high" }
+      ],
+      "why": "Strong profile for big ambiguous work; Pi fallback when Claude quota is low."
+    }
+  ],
+  "default": { "harness": "claude", "model": "fable", "effort": "high" }
+}
