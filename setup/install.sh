@@ -289,7 +289,15 @@ copy_example() {
     warn "Missing example: $src"
     return
   fi
-  mkdir -p "$(dirname -- "$dest")"
+  local destdir
+  destdir=$(dirname -- "$dest")
+  if [[ ! -d "$destdir" ]]; then
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      log "DRY: mkdir $destdir"
+      return
+    fi
+    mkdir -p -- "$destdir"
+  fi
   if [[ -f "$dest" ]]; then
     if cmp -s "$src" "$dest" 2>/dev/null; then
       ok "Unchanged: $dest"
