@@ -1819,7 +1819,17 @@ kimi_spawn_fail() {  # <detail>
 }
 
 if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
-  spawn_send_text_line "$WT_TARGET" 'treehouse get'
+  case "$(uname -s 2>/dev/null)" in
+    MSYS*|MINGW*|CYGWIN*)
+      # Windows panes need the bash-and-OSC entry shim; its header owns the
+      # verified rationale. Send the Windows path form because the pane's
+      # shell is PowerShell, not an MSYS bash.
+      spawn_send_text_line "$WT_TARGET" "bash '$(cygpath -w "$SCRIPT_DIR/fm-win-tree-enter.sh")'"
+      ;;
+    *)
+      spawn_send_text_line "$WT_TARGET" 'treehouse get'
+      ;;
+  esac
 
   # Wait for the treehouse subshell: the pane's cwd moves from the project to the worktree.
   # Target the stable window id, not the name: if the name is ever lost (e.g. an

@@ -2538,9 +2538,21 @@ fm_backend_herdr_target_ready() {  # <target>
 # process's cwd instead, which is what changes when `treehouse get` enters its
 # worktree subshell - confirmed live against a real treehouse acquisition.
 fm_backend_herdr_current_path() {  # <target>
+  local path
   fm_backend_herdr_target_ready "$1" || return 0
-  fm_backend_herdr_cli "$FM_BACKEND_HERDR_SESSION" pane get "$FM_BACKEND_HERDR_PANE" 2>/dev/null \
-    | jq -r '.result.pane.foreground_cwd // empty' 2>/dev/null
+  # The Windows herdr build has no foreground_cwd field at all; there,
+  # .result.pane.cwd is fed live by OSC 9;9 from the pane's shell (which
+  # bin/fm-win-tree-enter.sh guarantees for worker panes), so it is the
+  # tracking source rather than the frozen creation-time value the comment
+  # above describes for builds that do expose foreground_cwd. The fallback
+  # is gated on the KEY being absent, never on an empty value, so
+  # foreground_cwd-bearing builds keep their exact semantics.
+  path=$(fm_backend_herdr_cli "$FM_BACKEND_HERDR_SESSION" pane get "$FM_BACKEND_HERDR_PANE" 2>/dev/null \
+    | jq -r 'if (.result.pane | has("foreground_cwd")) then (.result.pane.foreground_cwd // empty) else (.result.pane.cwd // empty) end' 2>/dev/null)
+  case "$path" in
+    [A-Za-z]:*) path=$(cygpath -u -- "$path" 2>/dev/null) || return 0 ;;
+  esac
+  printf '%s' "$path"
 }
 
 # fm_backend_herdr_send_text_line: send one line of TEXT then submit,
