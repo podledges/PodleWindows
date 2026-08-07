@@ -147,10 +147,19 @@ function Test-BashIsGitFriendly {
   return [pscustomobject]@{ Ok = $true; Detail = $first }
 }
 
+function Read-HostSafe([string]$Prompt) {
+  try {
+    return Read-Host $Prompt
+  } catch {
+    Write-Warn 'Not running in an interactive session; using default answer.'
+    return ''
+  }
+}
+
 function Read-YesNo([string]$Prompt, [bool]$DefaultNo = $true) {
   if ($Yes -and -not $DefaultNo) { return $true }
   $suffix = if ($DefaultNo) { '[y/N]' } else { '[Y/n]' }
-  $r = Read-Host "$Prompt $suffix"
+  $r = Read-HostSafe "$Prompt $suffix"
   if ([string]::IsNullOrWhiteSpace($r)) { return -not $DefaultNo }
   return $r -match '^(y|yes)$'
 }
@@ -163,7 +172,7 @@ function Get-PrimaryChoice {
   Write-Host '  Yes = lots of GPT remaining, OR little/no Claude left  -> Pi primary (crew: Grok + GPT/Codex)'
   Write-Host '  No  = Claude usage still available / prefer subscription -> Claude primary (save API credits)'
   Write-Host ''
-  $r = Read-Host 'Do you have a lot of GPT usage remaining, or little/no Claude usage left? [y/N]'
+  $r = Read-HostSafe 'Do you have a lot of GPT usage remaining, or little/no Claude usage left? [y/N]'
   if ($r -match '^(y|yes)$') { return 'pi' }
   return 'claude'
 }
