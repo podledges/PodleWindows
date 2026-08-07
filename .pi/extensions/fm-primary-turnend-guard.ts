@@ -8,6 +8,7 @@ import {
   classifyFirstmateCurrentOperationalText,
   encodeFirstmateOperationalInput,
 } from "./lib/fm-operational-input.ts";
+import { shellScriptInvocation } from "./lib/fm-win-shell.ts";
 
 let guardFollowupActive = false;
 
@@ -71,9 +72,16 @@ const sessionstartTruncatedMarker =
 
 function runSessionstartHook(source: string): Promise<string> {
   return new Promise((resolveResult) => {
-    const child = spawn(`${root}/bin/fm-sessionstart-run.sh`, ["--source", source], {
-      stdio: ["ignore", "pipe", "ignore"],
-    });
+    const sessionstart = shellScriptInvocation(`${root}/bin/fm-sessionstart-run.sh`, ["--source", source]);
+    let child;
+    try {
+      child = spawn(sessionstart.file, sessionstart.args, {
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+    } catch {
+      resolveResult("");
+      return;
+    }
     const chunks: Buffer[] = [];
     let retainedBytes = 0;
     let truncated = false;
@@ -124,9 +132,16 @@ async function injectSessionstart(pi: ExtensionAPI, source: string): Promise<voi
 
 function runGuard(): Promise<{ code: number; stderr: string }> {
   return new Promise((resolveResult) => {
-    const child = spawn(`${root}/bin/fm-turnend-guard.sh`, {
-      stdio: ["pipe", "ignore", "pipe"],
-    });
+    const guard = shellScriptInvocation(`${root}/bin/fm-turnend-guard.sh`);
+    let child;
+    try {
+      child = spawn(guard.file, guard.args, {
+        stdio: ["pipe", "ignore", "pipe"],
+      });
+    } catch {
+      resolveResult({ code: 0, stderr: "" });
+      return;
+    }
     let stderr = "";
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
@@ -146,9 +161,16 @@ function runGuard(): Promise<{ code: number; stderr: string }> {
 // script owns its own decision and is inert outside the real primary checkout.
 function runChecker(script: string, command: string): Promise<{ code: number; stderr: string }> {
   return new Promise((resolveResult) => {
-    const child = spawn(`${root}/bin/${script}`, ["--command", command], {
-      stdio: ["ignore", "ignore", "pipe"],
-    });
+    const checker = shellScriptInvocation(`${root}/bin/${script}`, ["--command", command]);
+    let child;
+    try {
+      child = spawn(checker.file, checker.args, {
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+    } catch {
+      resolveResult({ code: 0, stderr: "" });
+      return;
+    }
     let stderr = "";
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString();

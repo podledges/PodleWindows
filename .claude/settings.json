@@ -13,24 +13,12 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/bin/fm-arm-pretool-check.sh --claude"
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/bin/fm-cd-pretool-check.sh --claude"
-          }
-        ]
-      },
-      {
         "matcher": ".*",
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/bin/fm-subagent-pretool-check.sh --claude"
+            "command": "bash \"/c/Users/ayden/.claude/hooks/fm-claude-pretool-all.sh\"",
+            "timeout": 30
           }
         ]
       }
@@ -51,5 +39,8 @@
         ]
       }
     ]
+  },
+  "env": {
+    "FM_TIMEOUT_MECHANISM_OVERRIDE": "bash"
   }
 }

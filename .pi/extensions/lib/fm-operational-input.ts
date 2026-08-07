@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { shellScriptInvocation } from "./fm-win-shell.ts";
 
 const operationalInputScript =
   process.env.FM_OPERATIONAL_INPUT_SCRIPT ||
@@ -24,7 +25,8 @@ function runOperationalInputCommand(
   kind?: FirstmateCurrentOperationalKind,
 ): string | undefined {
   const args = command === "encode" ? [command, kind ?? ""] : [command];
-  const result = spawnSync(operationalInputScript, args, {
+  const invocation = shellScriptInvocation(operationalInputScript, args);
+  const result = spawnSync(invocation.file, invocation.args, {
     encoding: "utf8",
     input: content,
     maxBuffer: 1024 * 1024,
