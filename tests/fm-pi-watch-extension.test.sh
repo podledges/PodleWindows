@@ -22,6 +22,7 @@ install_pi_watch_extension_fixture() {
   cp "$EXT" "$repo/.pi/extensions/fm-primary-pi-watch.ts"
   cp "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" "$repo/.pi/extensions/lib/fm-calm-visibility.ts"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/.pi/extensions/lib/fm-win-shell.ts" "$repo/.pi/extensions/lib/fm-win-shell.ts"
   mkdir -p "$repo/bin"
   cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
   chmod +x "$repo/bin/fm-operational-input.sh"

@@ -833,14 +833,14 @@ e2e_herdr() {
   # shellcheck source=/dev/null
   . "$ROOT/bin/fm-backend.sh"
 
-  local SESSION home_tmp cap_ws cap_tab cap_pane target
+  local SESSION home_tmp cap_ws cap_tab cap_pane cap_target
   local before during after ws_before ws_during ws_after out dtgt dtab
   SESSION="fm-lab-afk-launch-e2e-$$"
   export HERDR_SESSION="$SESSION"
   home_tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-e2e-home.XXXXXX")
   E2E_HERDR_CLEANUP() {
     FM_HOME="$home_tmp" FM_STATE_OVERRIDE="$home_tmp/state" \
-      FM_SUPERVISOR_TARGET="$target" FM_SUPERVISOR_BACKEND=herdr "$LAUNCH" stop >/dev/null 2>&1 || true
+      FM_SUPERVISOR_TARGET="$cap_target" FM_SUPERVISOR_BACKEND=herdr "$LAUNCH" stop >/dev/null 2>&1 || true
     herdr_safe_stop_and_delete "$SESSION" >/dev/null 2>&1 || true
     rm -rf "$home_tmp" 2>/dev/null || true
   }
@@ -853,12 +853,12 @@ e2e_herdr() {
   cap_tab=$(printf '%s' "$out" | jq -r '.result.tab.tab_id // empty')
   cap_pane=$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id // empty')
   if [ -z "$cap_ws" ] || [ -z "$cap_pane" ]; then E2E_HERDR_CLEANUP; fail "herdr e2e: could not create captain workspace"; return 0; fi
-  target="$SESSION:$cap_pane"
+  cap_target="$SESSION:$cap_pane"
   before=$(fm_backend_herdr_cli "$SESSION" pane list --workspace "$cap_ws" 2>/dev/null | jq --arg t "$cap_tab" '[.result.panes[]?|select(.tab_id==$t)]|length')
   ws_before=$(fm_backend_herdr_cli "$SESSION" workspace list 2>/dev/null | jq '[.result.workspaces[]?]|length')
 
   FM_HOME="$home_tmp" FM_STATE_OVERRIDE="$home_tmp/state" \
-    FM_SUPERVISOR_TARGET="$target" FM_SUPERVISOR_BACKEND=herdr FM_AFK_LAUNCH_ENTRY="$SLEEPER" \
+    FM_SUPERVISOR_TARGET="$cap_target" FM_SUPERVISOR_BACKEND=herdr FM_AFK_LAUNCH_ENTRY="$SLEEPER" \
     "$LAUNCH" start >/dev/null 2>&1
 
   during=$(fm_backend_herdr_cli "$SESSION" pane list --workspace "$cap_ws" 2>/dev/null | jq --arg t "$cap_tab" '[.result.panes[]?|select(.tab_id==$t)]|length')
@@ -872,7 +872,7 @@ e2e_herdr() {
   case "$dtgt" in "$SESSION":*) pass "herdr e2e: daemon terminal scoped to the lab session" ;; *) fail "herdr e2e: daemon terminal not in the lab session ($dtgt)" ;; esac
 
   FM_HOME="$home_tmp" FM_STATE_OVERRIDE="$home_tmp/state" \
-    FM_SUPERVISOR_TARGET="$target" FM_SUPERVISOR_BACKEND=herdr "$LAUNCH" stop >/dev/null 2>&1
+    FM_SUPERVISOR_TARGET="$cap_target" FM_SUPERVISOR_BACKEND=herdr "$LAUNCH" stop >/dev/null 2>&1
 
   after=$(fm_backend_herdr_cli "$SESSION" pane list --workspace "$cap_ws" 2>/dev/null | jq --arg t "$cap_tab" '[.result.panes[]?|select(.tab_id==$t)]|length')
   ws_after=$(fm_backend_herdr_cli "$SESSION" workspace list 2>/dev/null | jq '[.result.workspaces[]?]|length')
