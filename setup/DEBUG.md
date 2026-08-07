@@ -82,17 +82,25 @@ test -f AGENTS.md && test -d setup && echo OK
 - install directory empties mid-install
 - Threat name often looks like a behavioral / persistence heuristic (false positive class)
 
-### Fix (order matters)
+### Detection note: quarantine vs "never installed"
 
-1. **Add a Windows Defender exclusion** for `no-mistakes.exe` and/or its install directory (**admin**).
-2. **Only then** install or reinstall no-mistakes and start the daemon.
+If `no-mistakes --version` worked in a previous session (or the installer's tool-detection
+step showed a version) and now comes back **MISSING** with no other config change, that is
+the quarantine tell — binary present yesterday, gone today. Do not treat it as a fresh
+install; go straight to the recovery order below and check Defender history first.
+
+### Fix (order matters — exclusion, THEN (re)install, never the reverse)
+
+1. **Add a Windows Defender exclusion** for `no-mistakes.exe` and/or its install directory (**admin**). The installer's "no-mistakes install gate" (Step 1 in `install.ps1` / `install.sh`) prints this before it ever mentions installing.
+2. **Only then** install or reinstall no-mistakes and start the daemon (Step 2 of the same gate).
 3. If the daemon dies later, check Defender history **before** reconfiguring Firstmate:
 
 ```powershell
 Get-MpThreatDetection | Select-Object -First 20
 ```
 
-Exclusion **after** quarantine is too late for that install attempt — exclude, then reinstall.
+Exclusion **after** quarantine is too late for that install attempt. Recovery order is always
+**exclude, then reinstall** — never reinstall first and add the exclusion after.
 
 ---
 

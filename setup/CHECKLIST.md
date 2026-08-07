@@ -42,7 +42,24 @@ Get-Command bash | Select-Object -ExpandProperty Source
 - [ ] Node.js + npm available (`node -v`, `npm -v`)
 - [ ] Running commands from firstmate home (`AGENTS.md` + `setup/` both present)
 
-## B. Tools on PATH
+## B. no-mistakes Defender-first gate (do this before section C's no-mistakes check)
+
+Stop here before installing or trusting `no-mistakes`. Order matters — exclusion first,
+install second, never the reverse. See DEBUG.md §3.
+
+- [ ] Windows Defender exclusion added for `no-mistakes.exe` and/or its install directory (**admin**)
+- [ ] Exclusion verified read-only (no install/reinstall yet):
+      ```powershell
+      Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
+      Get-MpPreference | Select-Object -ExpandProperty ExclusionProcess
+      ```
+      Confirm an entry matches `no-mistakes` before proceeding.
+- [ ] **Only now**: no-mistakes installed or reinstalled
+- [ ] Daemon starts and stays up
+- [ ] `Get-MpThreatDetection | Select-Object -First 20` shows no fresh quarantine after start
+- [ ] If `no-mistakes --version` was working before and is now MISSING with no other change, treat it as a quarantine tell (DEBUG.md §3) — re-check the exclusion above before reinstalling, don't just reinstall
+
+## C. Tools on PATH
 
 Run and confirm each prints a version (not “not found”):
 
@@ -67,11 +84,11 @@ jq --version
 - [ ] Herdr
 - [ ] gh
 - [ ] treehouse
-- [ ] no-mistakes (only after Defender exclusion — DEBUG.md §3)
+- [ ] no-mistakes (section B's Defender gate must be checked off first — DEBUG.md §3)
 - [ ] jq
 - [ ] axi helpers optional but recommended: `gh-axi`, `tasks-axi`, `quota-axi`, `lavish-axi`
 
-## C. Auth (interactive — script cannot finish these)
+## D. Auth (interactive — script cannot finish these)
 
 - [ ] `gh auth login` (and `gh auth status` clean)
 - [ ] Claude Code logged in / subscription active
@@ -80,7 +97,7 @@ jq --version
 - [ ] Herdr installed and usable (`herdr status`)
 - [ ] Pi can start in the home
 
-## D. Firstmate home config
+## E. Firstmate home config
 
 - [ ] `config/backend` → `herdr`
 - [ ] `config/crew-harness` → `pi` **or** `claude` (matches your installer answer)
@@ -94,13 +111,6 @@ Primary choice reminder:
 |---|---|
 | Lots of GPT left / little Claude left | `pi` |
 | Claude usage available / prefer subscription | `claude` |
-
-## E. no-mistakes (if you ship with the gate)
-
-- [ ] Defender **exclusion added first** (admin)
-- [ ] no-mistakes installed after exclusion
-- [ ] Daemon starts and stays up
-- [ ] `Get-MpThreatDetection` shows no fresh quarantine after start
 
 ## F. Primary session smoke
 
