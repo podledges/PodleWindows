@@ -365,6 +365,22 @@
       "audience": "operator-current"
     },
     {
+      "path": "setup/CHECKLIST.md",
+      "audience": "operator-example"
+    },
+    {
+      "path": "setup/DEBUG.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "setup/PLAN.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "setup/README.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "skills/stow/SKILL.md",
       "audience": "public-product"
     }
