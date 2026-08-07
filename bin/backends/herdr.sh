@@ -700,6 +700,19 @@ fm_backend_herdr_canonical_socket_path() {  # <socket-path>
   local socket=$1 sock_dir sock_base
   [ -n "$socket" ] || return 1
   case "$socket" in
+    [A-Za-z]:*)
+      # Herdr on Windows injects and reports native drive-letter socket paths
+      # (both HERDR_SOCKET_PATH and session list --json), so convert to the
+      # POSIX form here, the one canonicalizer both identity sides flow
+      # through, keeping the comparison consistent under Git Bash/MSYS.
+      # The drive-prefix match stays separator-agnostic because MSYS bash does
+      # not match backslash inside a bracket expression; the /* gate below
+      # still rejects anything cygpath could not make absolute.
+      socket=$(cygpath -u -- "$socket" 2>/dev/null) || return 1
+      [ -n "$socket" ] || return 1
+      ;;
+  esac
+  case "$socket" in
     /*) ;;
     *) return 1 ;;
   esac
