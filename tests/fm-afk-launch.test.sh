@@ -845,6 +845,7 @@ e2e_herdr() {
   export HERDR_SESSION="$SESSION"
   home_tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-e2e-home.XXXXXX")
   E2E_HERDR_CLEANUP() {
+    # shellcheck disable=SC2031 # target is set in this same function scope before any cleanup call that needs it; no subshell is involved.
     FM_HOME="$home_tmp" FM_STATE_OVERRIDE="$home_tmp/state" \
       FM_SUPERVISOR_TARGET="$cap_target" FM_SUPERVISOR_BACKEND=herdr "$LAUNCH" stop >/dev/null 2>&1 || true
     herdr_safe_stop_and_delete "$SESSION" >/dev/null 2>&1 || true
