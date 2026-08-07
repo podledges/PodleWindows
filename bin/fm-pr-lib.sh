@@ -239,8 +239,12 @@ fm_pr_mode_private_matches() {  # <actual> <expected>
   esac
   [ "$2" = 600 ] && [ "$1" = 700 ] && return 0
   fm_pr_win_chmod_inert || return 1
+  # On a proven-inert mount the observed mode is synthetic: 644, or 755 under
+  # the execute heuristic (any .sh regardless of intended mode). Accept both
+  # for either private expectation; the boundary carriers are the ACL plus the
+  # unchanged identity checks.
   case "$2:$1" in
-    600:644|700:755) return 0 ;;
+    600:644|600:755|700:755|700:644) return 0 ;;
   esac
   return 1
 }
