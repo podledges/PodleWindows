@@ -66,6 +66,8 @@ The installer asks:
 
 Both branches keep `config/backend` = `herdr` unless you override.
 
+In a non-interactive shell (no stdin, e.g. automation/CI), both installers warn and fall back to the default answer — **No** → `claude` primary; pass `-Primary` / `--primary=` to choose explicitly.
+
 **Honest credit note**
 
 - Claude Code as primary → subscription-friendly for the firstmate session itself.
