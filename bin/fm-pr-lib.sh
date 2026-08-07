@@ -221,6 +221,18 @@ fm_pr_file_mode() {
   fi
 }
 
+# MSYS/Git Bash mounts surface a stuck owner-execute bit that chmod cannot
+# clear, so a private 600 expectation must also accept its owner-execute
+# variant 700 there. Both are owner-only; the privacy boundary is identical.
+# Exact match everywhere else.
+fm_pr_mode_private_matches() {  # <actual> <expected>
+  [ "$1" = "$2" ] && return 0
+  case "$(uname)" in
+    MSYS*|MINGW*|CYGWIN*) [ "$2" = 600 ] && [ "$1" = 700 ] ;;
+    *) return 1 ;;
+  esac
+}
+
 fm_pr_file_device() {
   if [ "$(uname)" = Darwin ]; then
     stat -f %d "$1" 2>/dev/null
@@ -266,7 +278,7 @@ fm_pr_sha256() {
 fm_pr_private_file_valid() {
   local path=$1 mode=$2 device=$3
   [ -f "$path" ] && [ ! -L "$path" ] || return 1
-  [ "$(fm_pr_file_mode "$path")" = "$mode" ] || return 1
+  fm_pr_mode_private_matches "$(fm_pr_file_mode "$path")" "$mode" || return 1
   [ "$(fm_pr_file_device "$path")" = "$device" ] || return 1
   [ "$(fm_pr_file_link_count "$path")" = 1 ]
 }
