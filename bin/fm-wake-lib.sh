@@ -28,12 +28,15 @@ mkdir -p "$STATE"
 # privilege, satisfies [ -L ], round-trips the owner path through readlink, and
 # is removed by 'rm -f' like any symlink.
 fm_lock_symlink() {
-  local target=$1 link=$2 win_target win_link
+  # "link_target", not "target": tests source this lib inside subshells, and
+  # ShellCheck's SC2030/SC2031 subshell tracking ignores 'local', so a generic
+  # name here false-flags any caller's own $target (see fm-afk-launch.test.sh).
+  local link_target=$1 link=$2 win_target win_link
   if [ -z "$_FM_LOCK_WINLINKS" ]; then
-    ln -s "$target" "$link" 2>/dev/null
+    ln -s "$link_target" "$link" 2>/dev/null
     return
   fi
-  win_target=$(cygpath -w -- "$target" 2>/dev/null) || return 1
+  win_target=$(cygpath -w -- "$link_target" 2>/dev/null) || return 1
   win_link=$(cygpath -w -- "$link" 2>/dev/null) || return 1
   # MSYS2_ARG_CONV_EXCL='*' stops the MSYS runtime from rewriting /J and the
   # Windows paths on their way to cmd.exe, which otherwise mangles the call.
