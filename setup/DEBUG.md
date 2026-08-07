@@ -12,7 +12,7 @@ The installer (`install.ps1` / `install.sh`) warns early when `bash` resolves to
 - Firstmate / Herdr / treehouse / hooks misbehave
 - Scripts that expect MSYS paths fail oddly
 - `which bash` / first `where.exe bash` → `System32\bash.exe`, `WindowsApps`, or WSL
-- Installer: `WARN: bash looks like WSL/store shadow` / `Windows PATH resolves bash to WSL/store shadow`
+- Installer: any `WARN` mentioning `WSL/store shadow` (`bash looks like WSL/store shadow`, `bash resolves to WSL/store shadow`, or `Windows PATH resolves bash to WSL/store shadow`)
 
 ### Fix
 
