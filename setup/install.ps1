@@ -86,16 +86,47 @@ function Get-ToolVersion([string]$Name, [string[]]$VersionArgs) {
   }
 }
 
+function Test-BashPathIsWslShadow([string]$Path) {
+  if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+  # System32/SysWOW64 bash launcher (with or without .exe), Store shim, or wsl-named hit.
+  return [bool](
+    $Path -match '(?i)[\\/]System32[\\/]bash(\.exe)?$' -or
+    $Path -match '(?i)[\\/]SysWOW64[\\/]bash(\.exe)?$' -or
+    $Path -match '(?i)[\\/]WindowsApps[\\/]' -or
+    $Path -match '(?i)[\\/]wsl\.exe$' -or
+    $Path -match '(?i)[\\/][Ww]sl[\\/]' -or
+    $Path -match '(?i)wslbash'
+  )
+}
+
 function Test-BashIsGitFriendly {
+  # Prefer where.exe order (true Windows PATH). Get-Command alone can disagree
+  # with cmd/where in edge cases; first where.exe hit is what most tools invoke.
+  $candidates = New-Object System.Collections.Generic.List[string]
+  try {
+    $whereOut = & where.exe bash 2>$null
+    foreach ($line in @($whereOut)) {
+      $t = if ($null -ne $line) { "$line".Trim() } else { '' }
+      if ($t -and -not $candidates.Contains($t)) { [void]$candidates.Add($t) }
+    }
+  } catch {
+    # where.exe missing or failed — fall through to Get-Command
+  }
   $bash = Get-Command bash -ErrorAction SilentlyContinue
-  if (-not $bash) {
+  if ($bash -and $bash.Source) {
+    $src = "$($bash.Source)".Trim()
+    if ($src -and -not $candidates.Contains($src)) {
+      $candidates.Insert(0, $src)
+    }
+  }
+  if ($candidates.Count -eq 0) {
     return [pscustomobject]@{ Ok = $false; Detail = 'bash not on PATH' }
   }
-  $src = $bash.Source
-  if ($src -match 'System32\\bash\.exe$' -or $src -match '\\WindowsApps\\' -or $src -match 'wsl') {
-    return [pscustomobject]@{ Ok = $false; Detail = "bash resolves to WSL/store shadow: $src" }
+  $first = $candidates[0]
+  if (Test-BashPathIsWslShadow $first) {
+    return [pscustomobject]@{ Ok = $false; Detail = "bash resolves to WSL/store shadow: $first" }
   }
-  return [pscustomobject]@{ Ok = $true; Detail = $src }
+  return [pscustomobject]@{ Ok = $true; Detail = $first }
 }
 
 function Read-YesNo([string]$Prompt, [bool]$DefaultNo = $true) {
@@ -175,10 +206,12 @@ Write-Ok "Firstmate home: $($paths.HomeDir)"
 
 $bashCheck = Test-BashIsGitFriendly
 if ($bashCheck.Ok) {
-  Write-Ok "bash: $($bashCheck.Detail)"
+  Write-Ok "bash (Windows PATH): $($bashCheck.Detail)"
+  Write-Log $log "bash ok: $($bashCheck.Detail)"
 } else {
   Write-Warn $bashCheck.Detail
-  Write-Warn 'Move Git for Windows above WSL on PATH, then FULLY restart terminals/IDE/Herdr/agents. See setup/DEBUG.md'
+  Write-Warn 'Move Git for Windows above WSL on PATH, then FULLY restart terminals/IDE/Herdr/agents.'
+  Write-Warn 'See setup/DEBUG.md section 1 (Git Bash must beat WSL).'
   Write-Log $log "bash warn: $($bashCheck.Detail)"
 }
 
