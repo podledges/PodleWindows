@@ -681,7 +681,16 @@ fm_backend_herdr_presentation_lock_namespace_valid() {
   expected_uid=$(id -u 2>/dev/null) || return 1
   owner=$(fm_backend_herdr_presentation_lock_namespace_uid "$dir") || return 1
   mode=$(fm_backend_herdr_presentation_lock_namespace_mode "$dir") || return 1
-  [ "$owner" = "$expected_uid" ] && [ "$mode" = 700 ]
+  [ "$owner" = "$expected_uid" ] || return 1
+  [ "$mode" = 700 ] && return 0
+  # MSYS noacl mounts report a synthetic 755 and chmod is inert, so the 700
+  # ownership expectation cannot be expressed there; the owner check above and
+  # the user-profile ACL carry the boundary. Same rationale as
+  # fm_pr_mode_private_matches (bin/fm-pr-lib.sh).
+  case "$(uname -s 2>/dev/null)" in
+    MSYS*|MINGW*|CYGWIN*) [ "$mode" = 755 ] ;;
+    *) return 1 ;;
+  esac
 }
 
 # Resolve the one verified running named-session socket path as an absolute
