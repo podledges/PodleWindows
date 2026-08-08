@@ -417,11 +417,18 @@ fm_lock_try_acquire() {
   fi
 
   if [ ! -e "$lockdir" ] && [ ! -L "$lockdir" ]; then
-    # Creation failed while no lock exists: a filesystem error (unwritable or
-    # vanished parent, name too long) or a release racing this attempt. There
-    # is nothing to steal; report busy so the caller retries, instead of
-    # treating the void as an infinitely stale lock and chasing its .steal.
-    return 1
+    if [ ! -e "$lockdir.steal" ] && [ ! -L "$lockdir.steal" ]; then
+      # Creation failed while no lock exists: a filesystem error (unwritable or
+      # vanished parent, name too long) or a release racing this attempt. There
+      # is nothing to steal; report busy so the caller retries, instead of
+      # treating the void as an infinitely stale lock and chasing its .steal.
+      return 1
+    fi
+    # An orphaned .steal beside the absent primary: a stealer died between
+    # removing the stale primary and recreating it. Fall through so the steal
+    # path below reclaims the orphan under the usual liveness and mid-acquire
+    # grace checks and recreates the primary; otherwise this state would stay
+    # busy forever, since the create above is blocked by the leftover .steal.
   fi
 
   pid=$(cat "$lockdir/pid" 2>/dev/null || true)

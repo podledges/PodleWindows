@@ -299,6 +299,43 @@ test_lock_live_steal_mutex_is_not_reclaimed() {
   pass "live steal mutex is not reclaimed"
 }
 
+test_lock_orphaned_stale_steal_self_heals() {
+  # A stealer killed between removing the stale primary and recreating it
+  # leaves {no primary, .steal owned by a dead pid}. That orphan must not make
+  # the lock permanently busy: fm_lock_acquire_wait has to reclaim it and
+  # acquire within the grace budget instead of hanging forever.
+  local dir state lockdir dead out pid rc newpid
+  dir=$(make_case lock-orphan-steal)
+  state="$dir/state"
+  lockdir="$state/.contend.lock"
+  dead=$(dead_pid)
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    owner=$(fm_lock_owner_dir "$2.steal") || exit 20
+    printf "%s\n" "$3" > "$owner/pid" || exit 21
+    fm_lock_symlink "$owner" "$2.steal" || exit 22
+  ' _ "$LIB" "$lockdir" "$dead" || fail "could not construct orphaned stale .steal fixture"
+  [ ! -e "$lockdir" ] || fail "fixture unexpectedly created a primary lock"
+  out="$dir/acquire.out"
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_lock_acquire_wait "$2"
+    cat "$2/pid"
+  ' _ "$LIB" "$lockdir" > "$out" &
+  pid=$!
+  rc=0
+  wait_for_exit "$pid" 100 || rc=$?
+  [ "$rc" -ne 124 ] || fail "fm_lock_acquire_wait hung on {no primary, orphaned stale .steal}"
+  [ "$rc" -eq 0 ] || fail "fm_lock_acquire_wait failed on orphaned stale .steal (rc=$rc)"
+  newpid=$(cat "$out" 2>/dev/null || true)
+  [ -n "$newpid" ] || fail "reclaimed lock has no pid recorded"
+  [ "$newpid" != "$dead" ] || fail "reclaimed lock still names the dead stealer pid"
+  if [ -e "$lockdir.steal" ] || [ -L "$lockdir.steal" ]; then
+    fail "orphaned .steal was not cleaned up after reclaim"
+  fi
+  pass "orphaned stale .steal beside an absent primary self-heals"
+}
+
 test_lock_does_not_steal_live_lock() {
   local dir state lockdir live out lockpid
   dir=$(make_case lock-live-noop)
@@ -1043,6 +1080,7 @@ test_lock_single_winner_under_concurrency
 test_lock_steals_dead_pid_lock
 test_lock_stale_steal_single_winner_under_concurrency
 test_lock_live_steal_mutex_is_not_reclaimed
+test_lock_orphaned_stale_steal_self_heals
 test_lock_does_not_steal_live_lock
 test_lock_empty_pid_uses_minimum_grace
 test_lock_late_claim_loses_after_recreate
