@@ -162,10 +162,19 @@ test_smoke_strict_escalates_warns() {
 }
 
 test_one_shot_dry_run_is_read_only() {
-  local home out status=0 before after
+  local home out status=0 before after unamestub
   home=$(make_fake_home oneshot-dry)
+  # install.sh refuses real WSL by design; this behavior test is about the
+  # one-shot flag surface, so neutralize WSL markers (env + a uname stub) so
+  # the same test runs on WSL dev machines. CI runners and Git Bash see no
+  # difference: their uname never matched the refusal in the first place.
+  unamestub="$TMP_ROOT/oneshot-uname-stub"
+  mkdir -p "$unamestub"
+  printf '#!/usr/bin/env bash\ncase "${1:-}" in -r) echo generic ;; *) uname_real=%s; echo Linux ;; esac\n' '' >"$unamestub/uname"
+  chmod +x "$unamestub/uname"
   before=$(find "$home" -type f | wc -l)
-  out=$(cd "$home" && bash setup/install.sh --one-shot --dry-run --primary=pi </dev/null 2>&1) || status=$?
+  out=$(cd "$home" && env -u WSL_INTEROP -u WSL_DISTRO_NAME PATH="$unamestub:$PATH" \
+    bash setup/install.sh --one-shot --dry-run --primary=pi </dev/null 2>&1) || status=$?
   [ "$status" -eq 0 ] || fail "--one-shot --dry-run exited nonzero ($status): $out"
   after=$(find "$home" -type f | wc -l)
   [ "$before" = "$after" ] || fail "--one-shot --dry-run changed the home ($before -> $after files)"
