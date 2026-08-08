@@ -712,12 +712,17 @@ trap spawn_abort_cleanup EXIT
 # <session> is required so secondmate and primary spawns serialize against the
 # same session without writing any other home's state directory.
 spawn_herdr_presentation_order_lock_acquire() {
-  local session=${1:-} attempt lock_path
+  local session=${1:-} attempt lock_path tries
+  # Bounded wait in 0.1s attempts. FM_HERDR_PRESENTATION_LOCK_TRIES lets a
+  # heavily loaded environment wait out a slow-but-live holder instead of
+  # falling back flat; invalid or zero values keep the default bound.
+  tries=${FM_HERDR_PRESENTATION_LOCK_TRIES:-50}
+  case "$tries" in ''|0|*[!0-9]*) tries=50 ;; esac
   [ -n "$session" ] || session=$(fm_backend_herdr_session)
   lock_path=$(fm_backend_herdr_presentation_session_lock_path "$session") || return 1
   HERDR_PRESENTATION_ORDER_LOCK="$lock_path"
   attempt=0
-  while [ "$attempt" -lt 50 ]; do
+  while [ "$attempt" -lt "$tries" ]; do
     if fm_lock_try_acquire "$HERDR_PRESENTATION_ORDER_LOCK"; then
       HERDR_PRESENTATION_ORDER_LOCK_HELD=1
       return 0
