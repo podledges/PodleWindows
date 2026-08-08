@@ -9,10 +9,15 @@
 
 .PARAMETER Strict
   WARNs also fail (clean-machine proof runs).
+
+.PARAMETER Manifest
+  Alternate manifest path (tests point this at fixture manifests). Defaults to
+  the sibling versions.manifest.
 #>
 [CmdletBinding()]
 param(
-  [switch]$Strict
+  [switch]$Strict,
+  [string]$Manifest
 )
 
 Set-StrictMode -Version Latest
@@ -29,7 +34,7 @@ function Write-SmokeFail([string]$Message) { Write-Host "[podles-smoke] FAIL: $M
 $setupDir = $PSScriptRoot
 if (-not $setupDir) { $setupDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
 $homeDir = Split-Path -Parent $setupDir
-$manifest = Join-Path $setupDir 'versions.manifest'
+$manifest = if ($Manifest) { $Manifest } else { Join-Path $setupDir 'versions.manifest' }
 
 # --- 1. Home shape ----------------------------------------------------------
 if (Test-Path -LiteralPath (Join-Path $homeDir 'AGENTS.md')) { Write-Ok 'AGENTS.md present' } else { Write-SmokeFail "AGENTS.md missing at $homeDir" }

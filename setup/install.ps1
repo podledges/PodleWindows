@@ -387,6 +387,7 @@ if (-not $SkipWinget -and -not $DryRun -and (Test-CommandExists 'winget')) {
         Write-Info "winget install $id"
         winget install --id $id --accept-source-agreements --accept-package-agreements 2>&1 |
           Tee-Object -FilePath $log -Append | Out-Host
+        if ($LASTEXITCODE -ne 0) { Write-Warn "winget failed for $id" }
       }
       Write-Warn 'New winget installs need a FULL shell restart before they appear on PATH.'
     }

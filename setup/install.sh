@@ -210,7 +210,7 @@ offer_defender_exclusion() {
   log "via an elevated PowerShell (expect a UAC prompt)."
   if [[ "$DRY_RUN" -eq 1 ]]; then
     log "DRY: would run Add-MpPreference -ExclusionPath '$win_dir' elevated"
-    return 0
+    return 1
   fi
   if ! ask_yn "Add the Defender exclusion now (elevated)?" 1; then
     log "Skipped Defender exclusion helper."
