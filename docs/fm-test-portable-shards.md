@@ -95,7 +95,7 @@ It separately verifies that the portable serial CI shards are non-empty, disjoin
 ## Timing artifacts
 
 Portable shards, each portable serial shard, and the Herdr lane upload runner-generated timing JSON.
-`bin/fm-test-run.sh --aggregate-json` creates the combined summary artifact.
+`bin/fm-test-run.sh --aggregate-json` creates the combined summary artifact on push-to-main runs only; pull requests upload the per-lane artifacts without aggregation.
 `.github/workflows/ci.yml` owns the exact artifact names and aggregation wiring.
 
 ## Local entry points
