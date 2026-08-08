@@ -1911,7 +1911,7 @@ teardown_herdr_require_prerequisites() {  # <task-id>
 }
 
 teardown_herdr_preflight_target() {  # <target> <task-id>
-  local target=$1 task_id=$2 session pane presence lock_path verified_lock_path lock_session held_path attempt
+  local target=$1 task_id=$2 session pane presence lock_path verified_lock_path lock_session held_path attempt tries
   teardown_herdr_require_prerequisites "$task_id" || return 1
   if ! fm_backend_herdr_parse_target "$target"; then
     echo "error: herdr endpoint $target for $task_id could not be parsed exactly; nothing was changed - repair the endpoint metadata and rerun teardown" >&2
@@ -1944,8 +1944,13 @@ teardown_herdr_preflight_target() {  # <target> <task-id>
 $TEARDOWN_HERDR_LOCK_RECORDS
 FMEOF
   fi
+  # Bounded wait in 0.1s attempts. FM_HERDR_PRESENTATION_LOCK_TRIES lets a
+  # heavily loaded environment wait out a slow-but-live holder instead of
+  # refusing the teardown; invalid or zero values keep the default bound.
+  tries=${FM_HERDR_PRESENTATION_LOCK_TRIES:-50}
+  case "$tries" in ''|0|*[!0-9]*) tries=50 ;; esac
   attempt=0
-  while [ "$attempt" -lt 50 ]; do
+  while [ "$attempt" -lt "$tries" ]; do
     if fm_lock_try_acquire "$lock_path"; then
       if ! verified_lock_path=$(fm_backend_herdr_presentation_session_lock_path "$session") \
         || [ "$verified_lock_path" != "$lock_path" ]; then

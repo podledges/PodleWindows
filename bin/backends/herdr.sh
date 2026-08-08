@@ -3051,13 +3051,18 @@ fm_backend_herdr_kill_serialized() {  # <session> <pane>
 fm_backend_herdr_kill() {  # <target>
   fm_backend_herdr_target_ready "$1" || return 0
   local session=$FM_BACKEND_HERDR_SESSION pane=$FM_BACKEND_HERDR_PANE
-  local lock_path attempt=0 lock_held=0
+  local lock_path attempt=0 lock_held=0 tries
+  # Bounded wait in 0.1s attempts. FM_HERDR_PRESENTATION_LOCK_TRIES lets a
+  # heavily loaded environment wait out a slow-but-live holder instead of
+  # refusing the pane close; invalid or zero values keep the default bound.
+  tries=${FM_HERDR_PRESENTATION_LOCK_TRIES:-50}
+  case "$tries" in ''|0|*[!0-9]*) tries=50 ;; esac
   if ! declare -F fm_lock_try_acquire >/dev/null 2>&1; then
     # shellcheck source=bin/fm-wake-lib.sh
     . "$FM_BACKEND_HERDR_ROOT/bin/fm-wake-lib.sh"
   fi
   if lock_path=$(fm_backend_herdr_presentation_session_lock_path "$session"); then
-    while [ "$attempt" -lt 50 ]; do
+    while [ "$attempt" -lt "$tries" ]; do
       if fm_lock_try_acquire "$lock_path"; then
         lock_held=1
         break
