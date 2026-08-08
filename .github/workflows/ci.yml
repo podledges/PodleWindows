@@ -282,6 +282,10 @@ jobs:
           if-no-files-found: warn
 
   # Aggregate per-lane timing into one summary artifact for critical-path review.
+  # Push-to-main only: this job is pure observability, and as the fan-in it is
+  # always the last job to schedule, so on PRs a mid-run infra failure (runner
+  # capacity, spending-limit exhaustion) surfaced here as a red check on an
+  # otherwise green run (PR #23). Per-lane timing artifacts still upload on PRs.
   tests-timing-aggregate:
     name: Behavior timing aggregate
     runs-on: ubuntu-latest
@@ -290,7 +294,7 @@ jobs:
       - tests-portable-parallel-2
       - tests-portable-serial
       - tests-herdr
-    if: always()
+    if: always() && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v6
       - name: Download lane timing artifacts
