@@ -12,17 +12,42 @@ It does **not** replace upstream [firstmate](https://github.com/kunchenguid/firs
 
 ## TL;DR
 
+One-shot mode (closest to a single action: auto-installs everything installable
+via winget + npm, offers the Defender-exclusion helper, applies config for your
+primary choice, ends with a READY / NOT READY verdict):
+
 ```powershell
 # From the firstmate home root (folder that contains AGENTS.md and setup/)
 cd path\to\PODLES-agent-workspace
-powershell -ExecutionPolicy Bypass -File .\setup\install.ps1
+powershell -ExecutionPolicy Bypass -File .\setup\install.ps1 -OneShot
 ```
 
 Or Git Bash:
 
 ```sh
 cd /path/to/PODLES-agent-workspace
+./setup/install.sh --one-shot
+```
+
+Guided mode (same flow, asks before each install):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup\install.ps1
+```
+
+```sh
 ./setup/install.sh
+```
+
+After either mode, verify with the smoke pass (tool floors from
+`setup/versions.manifest`, config shape, kit hygiene):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup\smoke.ps1
+```
+
+```sh
+./setup/smoke.sh
 ```
 
 Dry-run (no writes, no installs):
@@ -92,11 +117,12 @@ In a non-interactive shell (no stdin, e.g. automation/CI), both installers warn 
 4. Detects tools on `PATH` (and common install roots via env vars only).
 5. Presents the **no-mistakes install gate** (Defender-first, in dry-run and real runs alike): checks read-only whether a Defender exclusion for no-mistakes exists (never adds/removes one), states exclusion-before-install ordering, then checks for no-mistakes — flagging a previously-working-now-missing binary as a likely quarantine ([DEBUG.md](DEBUG.md) §3).
 6. Asks the **primary prompt** (unless `-Primary pi|claude` / `--primary=`).
-7. Offers best-effort install hints / optional npm globals (never silent force-overwrite of your configs).
-8. Writes missing config from examples after confirm (or `-ApplyConfig` / `--apply-config`).
-9. Prints the auth checklist and log path.
+7. Offers winget installs for missing foundation tools (`gh`, Node LTS, `jq`) and npm globals for the rest (Pi, Claude Code, Codex, axi tools) — auto-yes in one-shot mode, never a silent force-overwrite of your configs.
+8. With `-AddDefenderExclusion` / `--add-defender-exclusion` (implied by one-shot): offers to add the no-mistakes Defender exclusion via an **elevated** PowerShell after explicit consent + UAC. Default remains detect-only.
+9. Writes missing config from examples after confirm (or `-ApplyConfig` / `--apply-config`).
+10. Ends with a **verification rescan**: re-detects the stack for your chosen primary, probes `gh auth status`, and prints READY / NOT READY plus the remaining interactive steps in order.
 
-**Not automated (you must do these):** vendor logins, Herdr license/install UI, Pi project trust, Windows Defender exclusion (admin), full PATH reorder + restart.
+**Not automated (honest boundary — you must do these):** vendor logins (claude / codex / grok / herdr), Herdr license/install UI, Pi project trust, full PATH reorder + shell restart.
 
 ## Manual tool map
 

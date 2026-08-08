@@ -1,0 +1,17 @@
+# PODLES setup kit — known-good tool floor.
+# Format: <tool> <min-version> <required|optional> [version-args...]
+# smoke.sh fails on required tools missing/below floor, warns on optional.
+# Floors are the versions the PODLES stack was last proven on, not upstream
+# minimums; raise them when the fleet re-baselines.
+node 20.0.0 required -v
+npm 10.0.0 required -v
+git 2.40.0 required --version
+gh 2.40.0 required --version
+jq 1.7 required --version
+pi 0.1.0 optional --version
+claude 1.0.0 optional --version
+codex 0.1.0 optional --version
+grok 0.1.0 optional --version
+herdr 0.1.0 optional --version
+treehouse 0.1.0 optional --version
+no-mistakes 1.31.2 optional --version

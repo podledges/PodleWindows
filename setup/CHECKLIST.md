@@ -3,6 +3,23 @@
 Work top to bottom after `setup/install.ps1` or `setup/install.sh`.  
 Check boxes in your notes; this file is a template (safe to copy).
 
+## A0. Automated smoke first
+
+Run the scripted smoke before ticking anything by hand — it verifies tool
+floors from `setup/versions.manifest`, config shape, and kit hygiene in one go:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup\smoke.ps1
+```
+
+```sh
+./setup/smoke.sh
+```
+
+`SMOKE PASSED` means the manual sections below are down to auth and behavior
+checks the script cannot see. `--strict` / `-Strict` also fails on WARNs (use
+for clean-machine proof runs).
+
 ## A. Host prerequisites
 
 ### A1. `bash` is Git Bash (not WSL) — see DEBUG.md §1

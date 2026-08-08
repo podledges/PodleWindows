@@ -8,16 +8,27 @@ DRY_RUN=0
 PRIMARY=""
 APPLY_CONFIG=0
 SKIP_NPM=0
+SKIP_WINGET=0
 YES=0
+ONE_SHOT=0
+OFFER_DEFENDER=0
 
 usage() {
   cat <<'EOF'
 Usage: ./setup/install.sh [options]
 
+  --one-shot             Full replication pass: auto-yes installs (winget +
+                         npm), offer the Defender-exclusion helper, apply
+                         config for the chosen primary, end with a
+                         verification rescan. Interactive vendor auth stays
+                         manual (honest boundary) but is sequenced at the end.
   --dry-run              Detect only; no installs or config writes
   --primary=pi|claude    Skip primary prompt
   --apply-config         Write config from examples (prompt on overwrite)
+  --add-defender-exclusion  Offer to add the no-mistakes Defender exclusion
+                         via an elevated PowerShell (explicit consent; UAC)
   --skip-npm-install     Do not offer npm -g installs
+  --skip-winget          Do not offer winget installs
   -y, --yes              Prefer yes on optional non-destructive offers
   -h, --help             Show help
 
@@ -28,15 +39,24 @@ EOF
 
 for arg in "$@"; do
   case "$arg" in
+    --one-shot) ONE_SHOT=1 ;;
     --dry-run) DRY_RUN=1 ;;
     --primary=pi|--primary=claude) PRIMARY=${arg#--primary=} ;;
     --apply-config) APPLY_CONFIG=1 ;;
+    --add-defender-exclusion) OFFER_DEFENDER=1 ;;
     --skip-npm-install) SKIP_NPM=1 ;;
+    --skip-winget) SKIP_WINGET=1 ;;
     -y|--yes) YES=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; usage; exit 2 ;;
   esac
 done
+
+if [[ "$ONE_SHOT" -eq 1 && "$DRY_RUN" -eq 0 ]]; then
+  YES=1
+  APPLY_CONFIG=1
+  OFFER_DEFENDER=1
+fi
 
 log()  { printf '[podles-setup] %s\n' "$*"; }
 ok()   { printf '[podles-setup] OK: %s\n' "$*"; }
@@ -160,6 +180,53 @@ check_tool grok --version || true
 check_tool herdr --version || true
 check_tool treehouse --version || true
 
+# Locate the no-mistakes install directory for the exclusion helper. Uses the
+# environment, never a hardcoded user profile path.
+no_mistakes_dir() {
+  local base
+  base=${LOCALAPPDATA:-}
+  [[ -n "$base" ]] || return 1
+  base=$(cygpath -u -- "$base" 2>/dev/null || printf '%s' "$base")
+  [[ -d "$base/no-mistakes" ]] || return 1
+  printf '%s' "$base/no-mistakes"
+}
+
+# Consented, elevated Add-MpPreference for the no-mistakes install directory.
+# Only runs when the operator explicitly opted in (--add-defender-exclusion or
+# --one-shot) AND confirms the UAC prompt. Detect-only remains the default.
+offer_defender_exclusion() {
+  local nm_dir win_dir
+  if ! nm_dir=$(no_mistakes_dir); then
+    warn "Cannot locate the no-mistakes install directory (LOCALAPPDATA/no-mistakes)."
+    warn "Install no-mistakes first or add the exclusion manually — setup/DEBUG.md #3."
+    return 1
+  fi
+  win_dir=$(cygpath -w -- "$nm_dir" 2>/dev/null) || {
+    warn "Could not translate $nm_dir to a Windows path."
+    return 1
+  }
+  log "Defender exclusion helper: will add an exclusion for"
+  log "  $win_dir"
+  log "via an elevated PowerShell (expect a UAC prompt)."
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "DRY: would run Add-MpPreference -ExclusionPath '$win_dir' elevated"
+    return 0
+  fi
+  if ! ask_yn "Add the Defender exclusion now (elevated)?" 1; then
+    log "Skipped Defender exclusion helper."
+    return 1
+  fi
+  # Start-Process -Verb RunAs triggers UAC; -Wait so the re-check below is real.
+  if powershell.exe -NoProfile -Command \
+    "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command','Add-MpPreference -ExclusionPath \"$win_dir\"'" \
+    >>"$LOG_FILE" 2>&1; then
+    ok "Defender exclusion helper finished; re-checking."
+    return 0
+  fi
+  warn "Elevated Add-MpPreference did not complete (UAC declined?). Add manually — setup/DEBUG.md #3."
+  return 1
+}
+
 # Read-only inspection only. Never adds/removes exclusions.
 check_defender_exclusion() {
   if ! command -v powershell.exe >/dev/null 2>&1; then
@@ -234,6 +301,19 @@ case "$DEFENDER_STATUS" in
   *) warn "Could not verify Defender exclusion ($DEFENDER_DETAIL). Confirm manually before continuing — see setup/DEBUG.md #3." ;;
 esac
 echo "defender-exclusion=$DEFENDER_STATUS" >>"$LOG_FILE"
+if [[ "$OFFER_DEFENDER" -eq 1 && "$DEFENDER_STATUS" != present ]]; then
+  if offer_defender_exclusion; then
+    DEFENDER_RESULT=$(check_defender_exclusion)
+    DEFENDER_STATUS=${DEFENDER_RESULT%%|*}
+    DEFENDER_DETAIL=${DEFENDER_RESULT#*|}
+    if [[ "$DEFENDER_STATUS" == present ]]; then
+      ok "Defender exclusion now present: $DEFENDER_DETAIL"
+    else
+      warn "Exclusion still not visible ($DEFENDER_DETAIL); non-admin sessions cannot read it — verify from an elevated shell."
+    fi
+    echo "defender-exclusion-after-helper=$DEFENDER_STATUS" >>"$LOG_FILE"
+  fi
+fi
 log "Step 2 (ONLY AFTER Step 1): install or reinstall no-mistakes."
 NM_VER=$(tool_ver no-mistakes --version) || NM_VER=$(tool_ver no-mistakes version) || NM_VER=""
 if [[ -n "$NM_VER" ]]; then
@@ -250,25 +330,52 @@ PRIMARY=$(choose_primary)
 log "Primary harness choice: $PRIMARY"
 echo "primary=$PRIMARY" >>"$LOG_FILE"
 
+missing_has() {
+  printf '%s\n' "${MISSING[@]+"${MISSING[@]}"}" | grep -qx "$1"
+}
+
+# Foundation tools via winget (true Windows installs; PATH lands machine-wide
+# after a shell restart). Only offers what is missing.
+if [[ "$SKIP_WINGET" -eq 0 && "$DRY_RUN" -eq 0 ]] && command -v winget.exe >/dev/null 2>&1; then
+  WINGET_IDS=()
+  missing_has gh && WINGET_IDS+=('GitHub.cli')
+  missing_has node && WINGET_IDS+=('OpenJS.NodeJS.LTS')
+  missing_has jq && WINGET_IDS+=('jqlang.jq')
+  if [[ ${#WINGET_IDS[@]} -gt 0 ]]; then
+    log "Winget installs available for: ${WINGET_IDS[*]}"
+    if ask_yn "Run winget install for the packages listed above?" 0; then
+      for id in "${WINGET_IDS[@]}"; do
+        log "winget install $id"
+        winget.exe install --id "$id" --accept-source-agreements --accept-package-agreements \
+          2>&1 | tee -a "$LOG_FILE" || warn "winget failed for $id"
+      done
+      warn "New winget installs need a FULL shell restart before they appear on PATH."
+    fi
+  fi
+elif [[ "$DRY_RUN" -eq 1 ]]; then
+  log "DRY: skipped winget install offers"
+fi
+
 if [[ "$SKIP_NPM" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
   NPM_PKGS=()
   for p in gh-axi lavish-axi quota-axi tasks-axi chrome-devtools-axi; do
     command -v "$p" >/dev/null 2>&1 || NPM_PKGS+=("$p")
   done
-  if printf '%s\n' "${MISSING[@]+"${MISSING[@]}"}" | grep -qx pi; then
-    NPM_PKGS+=('@earendil-works/pi-coding-agent')
-  fi
-  if printf '%s\n' "${MISSING[@]+"${MISSING[@]}"}" | grep -qx claude; then
-    warn "Claude Code missing: install via current Anthropic docs, then re-run."
-  fi
+  missing_has pi && NPM_PKGS+=('@earendil-works/pi-coding-agent')
+  missing_has claude && NPM_PKGS+=('@anthropic-ai/claude-code')
+  missing_has codex && NPM_PKGS+=('@openai/codex')
+  NPM_ASK_DEFAULT=1
+  [[ "$ONE_SHOT" -eq 1 ]] && NPM_ASK_DEFAULT=0
   if [[ ${#NPM_PKGS[@]} -gt 0 ]] && command -v npm >/dev/null 2>&1; then
     log "Optional npm globals: ${NPM_PKGS[*]}"
-    if ask_yn "Run npm install -g for the packages listed above?" 1; then
+    if ask_yn "Run npm install -g for the packages listed above?" "$NPM_ASK_DEFAULT"; then
       for pkg in "${NPM_PKGS[@]}"; do
         log "npm install -g $pkg"
         npm install -g "$pkg" 2>&1 | tee -a "$LOG_FILE" || warn "npm failed for $pkg"
       done
     fi
+  elif [[ ${#NPM_PKGS[@]} -gt 0 ]]; then
+    warn "npm not available; cannot offer: ${NPM_PKGS[*]} (install Node first, restart, re-run)"
   fi
 elif [[ "$DRY_RUN" -eq 1 ]]; then
   log "DRY: skipped npm install offers"
@@ -346,16 +453,56 @@ if [[ "$APPLY_CONFIG" -eq 1 || "$DRY_RUN" -eq 1 ]]; then
 fi
 
 echo ""
-log "Next steps"
-echo "  1. Fix WARNs (Git Bash PATH) and FULLY restart shells."
-echo "  2. Auth: gh auth login; claude/codex/grok; herdr."
-echo "  3. Open setup/CHECKLIST.md"
-if [[ "$PRIMARY" == pi ]]; then
-  echo "  4. cd \"$HOME_DIR\" && pi   # approve project trust"
-else
-  echo "  4. cd \"$HOME_DIR\" && claude  # trust + bypass-permissions dialogs"
+log "Verification rescan"
+READY=1
+VERIFY_MISSING=()
+for t in node npm git gh jq herdr; do
+  if command -v "$t" >/dev/null 2>&1; then
+    ok "verified: $t"
+  else
+    VERIFY_MISSING+=("$t")
+    READY=0
+  fi
+done
+case "$PRIMARY" in
+  pi) command -v pi >/dev/null 2>&1 || { VERIFY_MISSING+=(pi); READY=0; } ;;
+  claude) command -v claude >/dev/null 2>&1 || { VERIFY_MISSING+=(claude); READY=0; } ;;
+esac
+command -v no-mistakes >/dev/null 2>&1 || { VERIFY_MISSING+=(no-mistakes); READY=0; }
+if [[ ${#VERIFY_MISSING[@]} -gt 0 ]]; then
+  warn "Still missing: ${VERIFY_MISSING[*]}"
+  warn "Fresh winget/npm installs need a FULL shell restart to land on PATH; restart and re-run to verify."
 fi
-echo "  5. Log: $LOG_FILE"
-echo "  6. Problems: setup/DEBUG.md"
-echo "done" >>"$LOG_FILE"
+echo "verify-missing=${VERIFY_MISSING[*]-none}" >>"$LOG_FILE"
+
+# Auth is interactive by design (honest boundary); sequence it, don't fake it.
+GH_AUTH=unknown
+if command -v gh >/dev/null 2>&1; then
+  if gh auth status >/dev/null 2>&1; then GH_AUTH=ok; else GH_AUTH=needed; fi
+fi
+echo "gh-auth=$GH_AUTH" >>"$LOG_FILE"
+
+echo ""
+if [[ "$READY" -eq 1 && "$GH_AUTH" == ok ]]; then
+  ok "READY: tools present and gh authenticated. Remaining steps are the interactive ones below."
+else
+  log "NOT READY yet — finish the steps below, restart shells, then re-run with --dry-run to confirm."
+fi
+log "Next steps (in order)"
+STEP=1
+echo "  $STEP. Fix WARNs above (Git Bash PATH order) and FULLY restart terminals/IDE/Herdr/agents."; STEP=$((STEP+1))
+if [[ "$GH_AUTH" != ok ]]; then
+  echo "  $STEP. gh auth login   # GitHub CLI auth"; STEP=$((STEP+1))
+fi
+echo "  $STEP. Vendor auth as needed: claude / codex / grok / herdr (each is interactive)."; STEP=$((STEP+1))
+echo "  $STEP. Open setup/CHECKLIST.md and run the smoke pass (setup/smoke.sh)."; STEP=$((STEP+1))
+if [[ "$PRIMARY" == pi ]]; then
+  echo "  $STEP. cd \"$HOME_DIR\" && pi   # approve project trust"
+else
+  echo "  $STEP. cd \"$HOME_DIR\" && claude  # trust + bypass-permissions dialogs"
+fi
+STEP=$((STEP+1))
+echo "  $STEP. Log: $LOG_FILE"
+echo "  Problems: setup/DEBUG.md"
+echo "done ready=$READY" >>"$LOG_FILE"
 ok "Setup script finished."

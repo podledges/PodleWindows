@@ -22,6 +22,19 @@
 .PARAMETER SkipNpmInstall
   Do not offer npm global installs.
 
+.PARAMETER SkipWinget
+  Do not offer winget installs.
+
+.PARAMETER AddDefenderExclusion
+  Offer to add the no-mistakes Defender exclusion via an elevated PowerShell
+  (explicit consent; UAC prompt). Detect-only remains the default.
+
+.PARAMETER OneShot
+  Full replication pass: auto-yes installs (winget + npm), offer the Defender
+  exclusion helper, apply config for the chosen primary, end with a
+  verification rescan. Interactive vendor auth stays manual (honest boundary)
+  but is sequenced at the end.
+
 .PARAMETER Yes
   Prefer non-destructive yes on optional install offers only.
 #>
@@ -32,8 +45,17 @@ param(
   [string]$Primary,
   [switch]$ApplyConfig,
   [switch]$SkipNpmInstall,
+  [switch]$SkipWinget,
+  [switch]$AddDefenderExclusion,
+  [switch]$OneShot,
   [switch]$Yes
 )
+
+if ($OneShot -and -not $DryRun) {
+  $Yes = $true
+  $ApplyConfig = $true
+  $AddDefenderExclusion = $true
+}
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
@@ -90,6 +112,49 @@ function Test-DefenderExclusion {
     return [pscustomobject]@{ Status = 'Absent'; Detail = 'No exclusion matching "no-mistakes" found' }
   } catch {
     return [pscustomobject]@{ Status = 'Unknown'; Detail = "Could not read Defender preferences: $($_.Exception.Message)" }
+  }
+}
+
+function Get-NoMistakesDir {
+  # Environment-derived; never a hardcoded user profile path.
+  $base = $env:LOCALAPPDATA
+  if (-not $base) { return $null }
+  $dir = Join-Path $base 'no-mistakes'
+  if (Test-Path -LiteralPath $dir) { return $dir }
+  return $null
+}
+
+function Invoke-DefenderExclusionHelper {
+  param([string]$LogPath, [switch]$WhatIfDry)
+  $nmDir = Get-NoMistakesDir
+  if (-not $nmDir) {
+    Write-Warn 'Cannot locate the no-mistakes install directory (LOCALAPPDATA\no-mistakes).'
+    Write-Warn 'Install no-mistakes first or add the exclusion manually - setup/DEBUG.md #3.'
+    return $false
+  }
+  Write-Info 'Defender exclusion helper: will add an exclusion for'
+  Write-Info "  $nmDir"
+  Write-Info 'via an elevated PowerShell (expect a UAC prompt).'
+  if ($WhatIfDry) {
+    Write-Info "DRY: would run Add-MpPreference -ExclusionPath '$nmDir' elevated"
+    return $false
+  }
+  if (-not (Read-YesNo 'Add the Defender exclusion now (elevated)?' $true)) {
+    Write-Info 'Skipped Defender exclusion helper.'
+    return $false
+  }
+  try {
+    Start-Process powershell -Verb RunAs -Wait -ArgumentList @(
+      '-NoProfile', '-Command', "Add-MpPreference -ExclusionPath `"$nmDir`""
+    ) -ErrorAction Stop
+    Write-Ok 'Defender exclusion helper finished; re-checking.'
+    Write-Log $LogPath "defender-helper=ran path=$nmDir"
+    return $true
+  } catch {
+    Write-Warn "Elevated Add-MpPreference did not complete (UAC declined?): $($_.Exception.Message)"
+    Write-Warn 'Add manually - setup/DEBUG.md #3.'
+    Write-Log $LogPath 'defender-helper=failed'
+    return $false
   }
 }
 
@@ -281,6 +346,17 @@ switch ($defenderCheck.Status) {
   default   { Write-Warn "Could not verify Defender exclusion ($($defenderCheck.Detail)). Confirm manually before continuing - see setup/DEBUG.md #3." }
 }
 Write-Log $log "defender-exclusion=$($defenderCheck.Status)"
+if ($AddDefenderExclusion -and $defenderCheck.Status -ne 'Present') {
+  if (Invoke-DefenderExclusionHelper -LogPath $log -WhatIfDry:$DryRun) {
+    $defenderCheck = Test-DefenderExclusion
+    if ($defenderCheck.Status -eq 'Present') {
+      Write-Ok "Defender exclusion now present: $($defenderCheck.Detail)"
+    } else {
+      Write-Warn "Exclusion still not visible ($($defenderCheck.Detail)); non-admin sessions cannot read it - verify from an elevated shell."
+    }
+    Write-Log $log "defender-exclusion-after-helper=$($defenderCheck.Status)"
+  }
+}
 Write-Host '  Step 2 (ONLY AFTER Step 1): install or reinstall no-mistakes.'
 $nmVer = Get-ToolVersion 'no-mistakes' @('--version')
 if ($nmVer) {
@@ -297,24 +373,48 @@ $primary = Get-PrimaryChoice -Forced $Primary
 Write-Info "Primary harness choice: $primary"
 Write-Log $log "primary=$primary"
 
+# Foundation tools via winget (true Windows installs; PATH lands machine-wide
+# after a shell restart). Only offers what is missing.
+if (-not $SkipWinget -and -not $DryRun -and (Test-CommandExists 'winget')) {
+  $wingetIds = @()
+  if ($missing -contains 'gh')   { $wingetIds += 'GitHub.cli' }
+  if ($missing -contains 'node') { $wingetIds += 'OpenJS.NodeJS.LTS' }
+  if ($missing -contains 'jq')   { $wingetIds += 'jqlang.jq' }
+  if ($wingetIds.Count -gt 0) {
+    Write-Info ("Winget installs available for: {0}" -f ($wingetIds -join ', '))
+    if (Read-YesNo 'Run winget install for the packages listed above?' $false) {
+      foreach ($id in $wingetIds) {
+        Write-Info "winget install $id"
+        winget install --id $id --accept-source-agreements --accept-package-agreements 2>&1 |
+          Tee-Object -FilePath $log -Append | Out-Host
+      }
+      Write-Warn 'New winget installs need a FULL shell restart before they appear on PATH.'
+    }
+  }
+} elseif ($DryRun) {
+  Write-Info 'DRY: skipped winget install offers'
+}
+
 if (-not $SkipNpmInstall -and -not $DryRun) {
   $npmTargets = @()
   if ($missing -contains 'pi') { $npmTargets += '@earendil-works/pi-coding-agent' }
-  # Package names drift — offer only if clearly missing and user confirms
-  if ($missing -contains 'claude') {
-    Write-Warn 'Claude Code missing: install via current Anthropic docs (npm global or native installer), then re-run detection.'
-  }
+  if ($missing -contains 'claude') { $npmTargets += '@anthropic-ai/claude-code' }
+  if ($missing -contains 'codex') { $npmTargets += '@openai/codex' }
   foreach ($pkg in @('gh-axi', 'lavish-axi', 'quota-axi', 'tasks-axi', 'chrome-devtools-axi')) {
     if (-not (Test-CommandExists $pkg)) { $npmTargets += $pkg }
   }
+  $npmAskDefault = $true
+  if ($OneShot) { $npmAskDefault = $false }
   if ($npmTargets.Count -gt 0 -and (Test-CommandExists 'npm')) {
     Write-Info ("Optional npm globals: {0}" -f ($npmTargets -join ', '))
-    if (Read-YesNo 'Run npm install -g for the packages listed above?' $true) {
+    if (Read-YesNo 'Run npm install -g for the packages listed above?' $npmAskDefault) {
       foreach ($pkg in $npmTargets) {
         Write-Info "npm install -g $pkg"
         npm install -g $pkg 2>&1 | Tee-Object -FilePath $log -Append | Out-Host
       }
     }
+  } elseif ($npmTargets.Count -gt 0) {
+    Write-Warn ("npm not available; cannot offer: {0} (install Node first, restart, re-run)" -f ($npmTargets -join ', '))
   }
 } elseif ($DryRun) {
   Write-Info 'DRY: skipped npm install offers'
@@ -363,19 +463,57 @@ if ($shouldApply -or $DryRun) {
 }
 
 Write-Host ''
-Write-Info 'Next steps'
-Write-Host '  1. Fix any WARN above (especially Git Bash PATH) and FULLY restart shells.'
-Write-Host '  2. Auth: gh auth login; claude/codex/grok logins; herdr ready.'
-Write-Host '  3. Open CHECKLIST.md and tick smoke tests.'
+Write-Info 'Verification rescan'
+$ready = $true
+$verifyMissing = @()
+$verifyTools = @('node', 'npm', 'git', 'gh', 'jq', 'herdr', 'no-mistakes')
+if ($primary -eq 'pi') { $verifyTools += 'pi' } else { $verifyTools += 'claude' }
+foreach ($t in $verifyTools) {
+  if (Test-CommandExists $t) {
+    Write-Ok "verified: $t"
+  } else {
+    $verifyMissing += $t
+    $ready = $false
+  }
+}
+if ($verifyMissing.Count -gt 0) {
+  Write-Warn ("Still missing: {0}" -f ($verifyMissing -join ', '))
+  Write-Warn 'Fresh winget/npm installs need a FULL shell restart to land on PATH; restart and re-run to verify.'
+}
+Write-Log $log ("verify-missing={0}" -f $(if ($verifyMissing.Count) { $verifyMissing -join ',' } else { 'none' }))
+
+# Auth is interactive by design (honest boundary); sequence it, don't fake it.
+$ghAuth = 'unknown'
+if (Test-CommandExists 'gh') {
+  gh auth status *> $null
+  if ($LASTEXITCODE -eq 0) { $ghAuth = 'ok' } else { $ghAuth = 'needed' }
+}
+Write-Log $log "gh-auth=$ghAuth"
+
+Write-Host ''
+if ($ready -and $ghAuth -eq 'ok') {
+  Write-Ok 'READY: tools present and gh authenticated. Remaining steps are the interactive ones below.'
+} else {
+  Write-Info 'NOT READY yet - finish the steps below, restart shells, then re-run with -DryRun to confirm.'
+}
+Write-Info 'Next steps (in order)'
+$step = 1
+Write-Host "  $step. Fix any WARN above (especially Git Bash PATH) and FULLY restart terminals/IDE/Herdr/agents."; $step++
+if ($ghAuth -ne 'ok') {
+  Write-Host "  $step. gh auth login   # GitHub CLI auth"; $step++
+}
+Write-Host "  $step. Vendor auth as needed: claude / codex / grok / herdr (each is interactive)."; $step++
+Write-Host "  $step. Open setup/CHECKLIST.md and run the smoke pass (setup/smoke.ps1 or setup/smoke.sh)."; $step++
 if ($primary -eq 'pi') {
-  Write-Host "  4. cd `"$($paths.HomeDir)`" ; pi"
+  Write-Host "  $step. cd `"$($paths.HomeDir)`" ; pi"
   Write-Host '     Approve project trust (or use -e fallback in setup/README.md).'
 } else {
-  Write-Host "  4. cd `"$($paths.HomeDir)`" ; claude"
+  Write-Host "  $step. cd `"$($paths.HomeDir)`" ; claude"
   Write-Host '     Folder trust, then bypass-permissions (Down+Enter if default is No/exit).'
 }
-Write-Host "  5. Log file: $log"
-Write-Host '  6. Problems: setup/DEBUG.md'
-Write-Log $log 'done'
+$step++
+Write-Host "  $step. Log file: $log"
+Write-Host '  Problems: setup/DEBUG.md'
+Write-Log $log "done ready=$ready"
 Write-Ok 'Setup script finished.'
 exit 0
