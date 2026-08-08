@@ -219,6 +219,9 @@ setup/
   CHECKLIST.md        post-install smoke
   install.ps1         Windows bootstrap
   install.sh          Git Bash bootstrap (Windows Git Bash only)
+  smoke.ps1           post-install verification (Windows)
+  smoke.sh            post-install verification (Git Bash / Linux CI)
+  versions.manifest   known-good tool floors smoke checks against
   config/
     backend.example
     crew-harness.example              # pi
@@ -243,22 +246,16 @@ setup/
 
 ## Flags reference
 
-### install.ps1
+The scripts own their exact flag lists - ask them directly instead of trusting a prose copy:
 
-| Flag | Meaning |
-|---|---|
-| `-DryRun` | Detect + print only |
-| `-Primary pi` / `-Primary claude` | Skip prompt |
-| `-ApplyConfig` | Write missing config from examples (still prompts on overwrite) |
-| `-SkipNpmInstall` | Do not offer `npm install -g ...` |
-| `-Yes` | Accept safe defaults where prompts allow (still will not wipe configs silently) |
+```sh
+./setup/install.sh --help
+./setup/smoke.sh --help
+```
 
-### install.sh
+```powershell
+Get-Help .\setup\install.ps1 -Detailed
+Get-Help .\setup\smoke.ps1 -Detailed
+```
 
-| Flag | Meaning |
-|---|---|
-| `--dry-run` | Detect + print only |
-| `--primary=pi` / `--primary=claude` | Skip prompt |
-| `--apply-config` | Write missing config |
-| `--skip-npm-install` | No npm global offers |
-| `-y` / `--yes` | Safer auto-yes on optional installs only |
+Key modes (`-OneShot` / `--one-shot`, `-DryRun` / `--dry-run`, `-AddDefenderExclusion` / `--add-defender-exclusion`, smoke `-Strict` / `--strict`) are described in the sections above.

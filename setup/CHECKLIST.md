@@ -64,7 +64,7 @@ Get-Command bash | Select-Object -ExpandProperty Source
 Stop here before installing or trusting `no-mistakes`. Order matters — exclusion first,
 install second, never the reverse. See DEBUG.md §3.
 
-- [ ] Windows Defender exclusion added for `no-mistakes.exe` and/or its install directory (**admin**)
+- [ ] Windows Defender exclusion added for `no-mistakes.exe` and/or its install directory (**admin** — manually, or via the installer's `-AddDefenderExclusion` / `--add-defender-exclusion` helper)
 - [ ] Exclusion verified read-only (no install/reinstall yet):
       ```powershell
       Get-MpPreference | Select-Object -ExpandProperty ExclusionPath

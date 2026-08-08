@@ -3,7 +3,7 @@
 **Repo:** [`podledges/podles-firstmate`](https://github.com/podledges/podles-firstmate) (private)  
 **Path:** `setup/` on `main`  
 **Audience:** future captain + other humans replicating the PODLES Windows agent stack  
-**Status:** Initial kit shipped (`0f0a01a`+). Remaining work is hardening, smoke proof, and optional automation—not greenfield rebuild.
+**Status:** Kit + hardening shipped (`0f0a01a`+, then one-shot mode, version manifest, Defender helper, smoke scripts). Remaining work is the clean-machine proof run / CI lane—not greenfield rebuild.
 
 ## Goal
 
@@ -49,6 +49,9 @@ setup/
   CHECKLIST.md         post-install smoke
   install.ps1          Windows bootstrap
   install.sh           Git Bash only (refuse WSL)
+  smoke.ps1            scripted post-install verification (Windows)
+  smoke.sh             scripted post-install verification (Git Bash / CI)
+  versions.manifest    known-good tool floors for smoke
   config/
     backend.example
     crew-harness.example                 # pi
@@ -88,9 +91,10 @@ setup/
 |---|---|
 | Docs + examples + installers | **Shipped** on `main` |
 | Dry-run, primary prompt, apply-config, logs, Git Bash guard | **Shipped** |
-| Clean-machine smoke proof / CI | **Not done** |
-| Hardening (version manifest, stronger install verification, Defender helper) | **Not done** |
-| Regression: no hardcoded user paths | **Not done** (manual review only) |
+| Hardening (version manifest, stronger install verification, Defender helper, one-shot mode) | **Shipped** (`versions.manifest`, verification rescan + READY/NOT READY verdict, `--add-defender-exclusion`, `--one-shot`) |
+| Smoke script (`smoke.sh` / `smoke.ps1`, `--strict` for proof runs) | **Shipped** (behavior tests: `tests/setup-smoke.test.sh`) |
+| Regression: no hardcoded user paths | **Shipped** (smoke kit-hygiene check) |
+| Clean-machine smoke proof run / CI lane | **Not done** (run smoke `--strict` on a fresh machine) |
 
 ## Ticketization intent
 

@@ -91,7 +91,7 @@ install; go straight to the recovery order below and check Defender history firs
 
 ### Fix (order matters — exclusion, THEN (re)install, never the reverse)
 
-1. **Add a Windows Defender exclusion** for `no-mistakes.exe` and/or its install directory (**admin**). The installer's "no-mistakes install gate" (Step 1 in `install.ps1` / `install.sh`) prints this before it ever mentions installing.
+1. **Add a Windows Defender exclusion** for `no-mistakes.exe` and/or its install directory (**admin**). The installer's "no-mistakes install gate" (Step 1 in `install.ps1` / `install.sh`) prints this before it ever mentions installing. The installer can add the exclusion for you via `-AddDefenderExclusion` / `--add-defender-exclusion` (implied by one-shot) after explicit consent + UAC; without that flag it stays detect-only.
 2. **Only then** install or reinstall no-mistakes and start the daemon (Step 2 of the same gate).
 3. If the daemon dies later, check Defender history **before** reconfiguring Firstmate:
 
