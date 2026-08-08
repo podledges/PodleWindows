@@ -408,12 +408,20 @@ fm_lock_recheck_stale_owner() {
 }
 
 fm_lock_try_acquire() {
-  local lockdir=$1 pid steal cur rc steal_owner primary_owner
+  local lockdir=$1 is_steal_mutex=${2:-} pid steal cur rc steal_owner primary_owner
   FM_LOCK_HELD_PID=
   FM_LOCK_OWNER_DIR=
 
   if fm_lock_try_create "$lockdir"; then
     return 0
+  fi
+
+  if [ ! -e "$lockdir" ] && [ ! -L "$lockdir" ]; then
+    # Creation failed while no lock exists: a filesystem error (unwritable or
+    # vanished parent, name too long) or a release racing this attempt. There
+    # is nothing to steal; report busy so the caller retries, instead of
+    # treating the void as an infinitely stale lock and chasing its .steal.
+    return 1
   fi
 
   pid=$(cat "$lockdir/pid" 2>/dev/null || true)
@@ -426,8 +434,32 @@ fm_lock_try_acquire() {
     return 1
   fi
 
+  if [ -n "$is_steal_mutex" ]; then
+    # This lock IS a steal mutex and it is stale. Never chase steal-of-steal:
+    # the .steal.steal... chain grows the name without bound (past NAME_MAX no
+    # operation on it can ever succeed), and the unbounded spin wedges the
+    # EXIT/signal handlers that log through these locks. Reclaim directly: the
+    # recheck keeps the mid-acquire grace, and the symlink claim inside
+    # fm_lock_try_create stays the atomic arbiter, so concurrent reclaimers
+    # still elect exactly one winner.
+    primary_owner=
+    if [ -L "$lockdir" ]; then
+      primary_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
+    fi
+    if ! fm_lock_recheck_stale_owner "$lockdir" "$primary_owner" "$pid"; then
+      FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
+      return 1
+    fi
+    fm_lock_remove_path "$lockdir" || true
+    if fm_lock_try_create "$lockdir"; then
+      return 0
+    fi
+    FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
+    return 1
+  fi
+
   steal="$lockdir.steal"
-  if ! fm_lock_try_acquire "$steal"; then
+  if ! fm_lock_try_acquire "$steal" steal-mutex; then
     FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
     FM_LOCK_OWNER_DIR=
     return 1
