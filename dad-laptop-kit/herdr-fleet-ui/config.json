@@ -1,0 +1,336 @@
+{
+    "version":  4,
+    "comment":  "Fleet-ui sidebar token format + colors. Edit providers / leftStyles to retheme or add agents.",
+    "format":  {
+                   "ctx":  "{used}·{pct}% {bar}",
+                   "ctxMissing":  "· {bar}",
+                   "left":  "{bits}",
+                   "leftEmpty":  "·",
+                   "leftBit":  "{label} {rem}%",
+                   "leftSep":  " · ",
+                   "barWidth":  8,
+                   "barFilled":  "▓",
+                   "barEmpty":  "░",
+                   "tokenUnit":  "K",
+                   "showTotalInCtx":  false
+               },
+    "colors":  {
+                   "ctx":  "#6CFFD4",
+                   "left":  "#FF5CAD",
+                   "leftBody":  "#6CFFD4",
+                   "leftPct":  "#FF5CAD",
+                   "leftDays":  "#00E5FF",
+                   "leftPeriod":  "#00E5FF",
+                   "fableName":  "#FFD36E",
+                   "adhd":  "#FF3DAA",
+                   "accent":  "#6CFFD4",
+                   "panelBg":  "#080810",
+                   "claudeAgent":  "#FFD36E",
+                   "codexAgent":  "#8EFCFF",
+                   "grokAgent":  "#FFA05A",
+                   "agyAgent":  "#A8F0EE"
+               },
+    "ansi":  {
+                 "ctx":  [
+                             108,
+                             255,
+                             212
+                         ],
+                 "ctxDim":  [
+                                40,
+                                200,
+                                150
+                            ],
+                 "left":  [
+                              255,
+                              92,
+                              173
+                          ],
+                 "leftDim":  [
+                                 200,
+                                 50,
+                                 130
+                             ],
+                 "leftBody":  [
+                                  108,
+                                  255,
+                                  212
+                              ],
+                 "leftPct":  [
+                                 255,
+                                 92,
+                                 173
+                             ],
+                 "leftDays":  [
+                                  0,
+                                  229,
+                                  255
+                              ],
+                 "leftPeriod":  [
+                                    0,
+                                    229,
+                                    255
+                                ],
+                 "fableName":  [
+                                   255,
+                                   211,
+                                   110
+                               ],
+                 "frame":  [
+                               140,
+                               110,
+                               180
+                           ],
+                 "white":  [
+                               245,
+                               245,
+                               250
+                           ]
+             },
+    "leftStyles":  {
+                       "comment":  "Named styles for $left. Shared compact design: \u0027{pct}% left · {period}\u0027. Providers pick via leftStyle or modelRules.",
+                       "bits":  {
+                                    "mode":  "bits"
+                                },
+                       "period-compact":  {
+                                              "mode":  "narrative",
+                                              "preferWindow":  "min",
+                                              "durationUnit":  "auto",
+                                              "useResetDays":  true,
+                                              "defaultDays":  6,
+                                              "windowDays":  {
+                                                                 "5h":  0.2,
+                                                                 "session":  0.2,
+                                                                 "wk":  6,
+                                                                 "week":  6,
+                                                                 "weekly":  6,
+                                                                 "7d":  6,
+                                                                 "mdl":  6,
+                                                                 "fable":  6
+                                                             },
+                                              "underlineSegments":  true,
+                                              "ansiRich":  true,
+                                              "segments":  [
+                                                               {
+                                                                   "template":  "{label} ",
+                                                                   "color":  "ctx",
+                                                                   "underline":  false
+                                                               },
+                                                               {
+                                                                   "template":  "{pct}% left",
+                                                                   "color":  "leftPct",
+                                                                   "underline":  true
+                                                               },
+                                                               {
+                                                                   "template":  " · ",
+                                                                   "color":  "ctx",
+                                                                   "underline":  false
+                                                               },
+                                                               {
+                                                                   "template":  "{period}",
+                                                                   "color":  "leftPeriod",
+                                                                   "underline":  true
+                                                               }
+                                                           ],
+                                              "comment":  "Binding (lowest-remaining) window, labeled: \u0027wk 15% left · 5d:12h\u0027 or \u00275h 9% left · 3h:41m\u0027. preferWindow min = the same limit usage notifications fire on; auto period renders d:h for long windows, h:m under 24h."
+                                          },
+                       "session-compact":  {
+                                               "mode":  "narrative",
+                                               "preferWindow":  "min",
+                                               "durationUnit":  "auto",
+                                               "useResetDays":  true,
+                                               "defaultDays":  0.2,
+                                               "windowDays":  {
+                                                                  "5h":  0.2,
+                                                                  "session":  0.2,
+                                                                  "wk":  6,
+                                                                  "week":  6
+                                                              },
+                                               "underlineSegments":  true,
+                                               "ansiRich":  true,
+                                               "segments":  [
+                                                                {
+                                                                    "template":  "{pct}% left",
+                                                                    "color":  "leftPct",
+                                                                    "underline":  true
+                                                                },
+                                                                {
+                                                                    "template":  " · ",
+                                                                    "color":  "ctx",
+                                                                    "underline":  false
+                                                                },
+                                                                {
+                                                                    "template":  "{period}",
+                                                                    "color":  "leftPeriod",
+                                                                    "underline":  true
+                                                                }
+                                                            ],
+                                               "comment":  "Sonnet / Opus session window: 95% left · 4h:20m"
+                                           },
+                       "weekly-narrative":  {
+                                                "mode":  "narrative",
+                                                "preferWindow":  "week",
+                                                "durationUnit":  "dh",
+                                                "useResetDays":  true,
+                                                "defaultDays":  6,
+                                                "windowDays":  {
+                                                                   "5h":  0.2,
+                                                                   "session":  0.2,
+                                                                   "wk":  6,
+                                                                   "week":  6,
+                                                                   "weekly":  6,
+                                                                   "7d":  6,
+                                                                   "mdl":  6,
+                                                                   "fable":  6
+                                                               },
+                                                "underlineSegments":  true,
+                                                "ansiRich":  true,
+                                                "segments":  [
+                                                                 {
+                                                                     "template":  "{pct}% left",
+                                                                     "color":  "leftPct",
+                                                                     "underline":  true
+                                                                 },
+                                                                 {
+                                                                     "template":  " · ",
+                                                                     "color":  "ctx",
+                                                                     "underline":  false
+                                                                 },
+                                                                 {
+                                                                     "template":  "{period}",
+                                                                     "color":  "leftPeriod",
+                                                                     "underline":  true
+                                                                 }
+                                                             ],
+                                                "comment":  "Alias of period-compact (kept for older modelRules)"
+                                            },
+                       "grok-credits-period":  {
+                                                   "mode":  "narrative",
+                                                   "preferWindow":  "credits",
+                                                   "durationUnit":  "dh",
+                                                   "useResetDays":  true,
+                                                   "defaultDays":  7,
+                                                   "skip":  [
+                                                                "chat"
+                                                            ],
+                                                   "underlineSegments":  true,
+                                                   "ansiRich":  true,
+                                                   "segments":  [
+                                                                    {
+                                                                        "template":  "{pct}% left",
+                                                                        "color":  "leftPct",
+                                                                        "underline":  true
+                                                                    },
+                                                                    {
+                                                                        "template":  " · ",
+                                                                        "color":  "ctx",
+                                                                        "underline":  false
+                                                                    },
+                                                                    {
+                                                                        "template":  "{period}",
+                                                                        "color":  "leftPeriod",
+                                                                        "underline":  true
+                                                                    }
+                                                                ],
+                                                   "comment":  "Grok credits % + reset horizon as Nd:Nh (same template as Claude)"
+                                               },
+                       "period-compact-min":  {
+                                                  "mode":  "narrative",
+                                                  "preferWindow":  "min",
+                                                  "durationUnit":  "auto",
+                                                  "useResetDays":  true,
+                                                  "defaultDays":  6,
+                                                  "skip":  [
+                                                               "chat"
+                                                           ],
+                                                  "underlineSegments":  true,
+                                                  "ansiRich":  true,
+                                                  "segments":  [
+                                                                   {
+                                                                       "template":  "{pct}% left",
+                                                                       "color":  "leftPct",
+                                                                       "underline":  true
+                                                                   },
+                                                                   {
+                                                                       "template":  " · ",
+                                                                       "color":  "ctx",
+                                                                       "underline":  false
+                                                                   },
+                                                                   {
+                                                                       "template":  "{period}",
+                                                                       "color":  "leftPeriod",
+                                                                       "underline":  true
+                                                                   }
+                                                               ],
+                                                  "comment":  "Tightest remaining window across bits (shared template)"
+                                              }
+                   },
+    "defaults":  {
+                     "contextWindow":  {
+                                           "claude":  1000000,
+                                           "grok":  500000,
+                                           "codex":  272000,
+                                           "agy":  1000000
+                                       },
+                     "leftStyle":  "period-compact"
+                 },
+    "providers":  {
+                      "claude":  {
+                                     "enabled":  true,
+                                     "quotaProvider":  "claude",
+                                     "reportCtx":  true,
+                                     "reportLeft":  true,
+                                     "statusline":  true,
+                                     "ctxSource":  "statusline",
+                                     "leftStyle":  "period-compact",
+                                     "modelRules":  [
+                                                        {
+                                                            "match":  "fable",
+                                                            "leftStyle":  "period-compact",
+                                                            "comment":  "Fable → weekly % left · Nd:Nh; name gold in statusline"
+                                                        },
+                                                        {
+                                                            "match":  "sonnet|opus",
+                                                            "leftStyle":  "session-compact",
+                                                            "comment":  "Sonnet / Opus → session % left · Xh:Ym"
+                                                        }
+                                                    ]
+                                 },
+                      "grok":  {
+                                   "enabled":  true,
+                                   "quotaProvider":  "grok",
+                                   "reportCtx":  true,
+                                   "reportLeft":  true,
+                                   "statusline":  false,
+                                   "ctxSource":  "session-tokens",
+                                   "sessionRoot":  "~/.grok/sessions",
+                                   "contextWindow":  500000,
+                                   "leftStyle":  "grok-credits-period"
+                               },
+                      "codex":  {
+                                    "enabled":  false,
+                                    "quotaProvider":  "codex",
+                                    "reportCtx":  false,
+                                    "reportLeft":  true,
+                                    "statusline":  false,
+                                    "ctxSource":  "none",
+                                    "leftStyle":  "period-compact",
+                                    "modelRules":  [
+                                                       {
+                                                           "match":  "sonnet|opus",
+                                                           "leftStyle":  "session-compact"
+                                                       }
+                                                   ],
+                                    "comment":  "Same compact templates as Claude when enabled."
+                                },
+                      "agy":  {
+                                  "enabled":  false,
+                                  "quotaProvider":  "agy",
+                                  "reportCtx":  false,
+                                  "reportLeft":  false,
+                                  "statusline":  false,
+                                  "ctxSource":  "none",
+                                  "leftStyle":  "period-compact"
+                              }
+                  }
+}

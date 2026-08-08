@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# pi-grok - launch Pi with a Grok (xAI) model instead of its GPT default.
+#
+# The "grok wrapper": crew work dispatched to Pi runs on Grok models, so it
+# burns xAI quota, not GPT/OpenAI or Claude quota.
+#
+# Requirements on this machine:
+#   1. Pi installed:  npm install -g @earendil-works/pi-coding-agent
+#   2. xAI provider authenticated in Pi (XAI_API_KEY exported, or whatever
+#      login flow `pi` offers for xAI on this version).
+#
+# IMPORTANT: model ids drift. On first use run plain `pi`, then `/model`, and
+# note the exact Grok model id your account exposes. If it is not "grok-4",
+# either export PI_GROK_MODEL=<real-id> in your shell profile or edit the
+# default below AND the matching model fields in config/crew-dispatch.json.
+set -euo pipefail
+
+PI_GROK_MODEL="${PI_GROK_MODEL:-grok-4}"
+exec pi --model "$PI_GROK_MODEL" "$@"
