@@ -261,6 +261,11 @@ cmd_start_public() {
 cmd_start() {
   local id=${1-} adapter out rc claimed bound_rc published_capture=0
   fm_procevent_source_id_valid "$id" || die "source id must be path-safe: $id"
+  # Fail closed on an invalid output bound BEFORE any lock or claim work: a die
+  # after the claim is acquired must release it through the EXIT trap, and a
+  # wedged claim-root lock can leave that trap hanging with the claim leaked.
+  # Validating up front means invalid input can never mint a claim at all.
+  case "$MAX_OUTPUT_BYTES" in ''|*[!0-9]*) die "FM_PROCEVENT_MAX_OUTPUT_BYTES must be a nonnegative integer" ;; esac
   require_runner_group
   fm_procevent_source_lock_acquire "$id" || die "cannot lock source: $id"
   if [ ! -f "$(source_file "$id")" ] || [ -L "$(source_file "$id")" ]; then
@@ -311,7 +316,6 @@ cmd_start() {
   printf '%s\n' "$$" > "$(runner_file "$id")" 2>/dev/null || true
   chmod 0600 "$(runner_file "$id")" 2>/dev/null || true
 
-  case "$MAX_OUTPUT_BYTES" in ''|*[!0-9]*) die "FM_PROCEVENT_MAX_OUTPUT_BYTES must be a nonnegative integer" ;; esac
   out=$(staging_file "$id" "$CLAIM_TOKEN")
   [ ! -e "$out" ] && [ ! -L "$out" ] || die "cannot safely stage output"
   (umask 077; : > "$out") || die "cannot stage output"
