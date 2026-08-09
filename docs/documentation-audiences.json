@@ -201,12 +201,40 @@
       "audience": "public-product"
     },
     {
+      "path": "dad-laptop-kit/README.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "dad-laptop-kit/config/scribe-prompt.md",
+      "audience": "operator-example"
+    },
+    {
+      "path": "dad-laptop-kit/herdr-fleet-ui/README.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "dad-laptop-kit/user-claude/skills/go-next/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "dad-laptop-kit/user-claude/skills/i-have-adhd/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "dad-laptop-kit/vault-seed/AGENTS.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": "docs/architecture.md",
       "audience": "maintainer-architecture"
     },
     {
       "path": "docs/arm-pretool-check.md",
       "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/borrowing-base-market-knowledge.md",
+      "audience": "public-product"
     },
     {
       "path": "docs/calm-mode-feasibility.md",
