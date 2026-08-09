@@ -1,0 +1,846 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crow's Nest — Portfolio Risk Console</title>
+<style>
+  /* ---------- tokens: light is the base; dark redefines tokens only ---------- */
+  :root {
+    --bg: #f1f2f4;
+    --card: #fbfcfd;
+    --card-2: #f5f6f8;
+    --ink: #12161c;
+    --ink-2: #505866;
+    --ink-3: #8a919c;
+    --line: #dfe3e9;
+    --line-2: #eceef1;
+    --accent: #1c5cab;
+    --accent-ink: #fbfcfd;
+    --accent-soft: #e3ecf7;
+    --chart-surface: #fcfcfb;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #4a3aa7;
+    --good: #008300; --warn: #b57b00; --serious: #cf4f1d; --crit: #ce3231;
+    --good-bg: #e2f1e2; --warn-bg: #f7edd4; --serious-bg: #fbe5da; --crit-bg: #fadfdf;
+    --shadow: 0 1px 2px rgba(18,22,28,.06), 0 4px 16px rgba(18,22,28,.05);
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131519; --card: #1b1e24; --card-2: #171a1f;
+      --ink: #f0f2f5; --ink-2: #a6aeb9; --ink-3: #6d7580;
+      --line: #2b303a; --line-2: #232730;
+      --accent: #5598e7; --accent-ink: #10151d; --accent-soft: #1e2c40;
+      --chart-surface: #1b1e24;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --good: #43b04a; --warn: #d9a13a; --serious: #e07040; --crit: #e66767;
+      --good-bg: #1c2b1d; --warn-bg: #2e2716; --serious-bg: #332017; --crit-bg: #341c1c;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #131519; --card: #1b1e24; --card-2: #171a1f;
+    --ink: #f0f2f5; --ink-2: #a6aeb9; --ink-3: #6d7580;
+    --line: #2b303a; --line-2: #232730;
+    --accent: #5598e7; --accent-ink: #10151d; --accent-soft: #1e2c40;
+    --chart-surface: #1b1e24;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #9085e9;
+    --good: #43b04a; --warn: #d9a13a; --serious: #e07040; --crit: #e66767;
+    --good-bg: #1c2b1d; --warn-bg: #2e2716; --serious-bg: #332017; --crit-bg: #341c1c;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 var(--sans);
+  }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-3); font-weight: 600;
+  }
+
+  /* ---------- command bar ---------- */
+  header {
+    position: sticky; top: 0; z-index: 40;
+    background: var(--card); border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 18px; padding: 10px 22px;
+    flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; margin-right: 6px; }
+  .brand b { font-size: 16px; letter-spacing: -0.01em; }
+  .brand span { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+  nav { display: flex; gap: 2px; flex-wrap: wrap; }
+  nav a {
+    color: var(--ink-2); text-decoration: none; font-size: 12.5px; font-weight: 600;
+    padding: 5px 10px; border-radius: 6px;
+  }
+  nav a:hover { background: var(--card-2); color: var(--ink); }
+  nav a:focus-visible, button:focus-visible, select:focus-visible, tr:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+  .bar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  select, .seg button {
+    background: var(--card-2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 7px; font: 600 12.5px var(--sans); padding: 5px 9px; cursor: pointer;
+  }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .demo-tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--warn); background: var(--warn-bg); border-radius: 5px; padding: 3px 8px; font-weight: 700;
+  }
+
+  main { max-width: 1340px; margin: 0 auto; padding: 20px 22px 80px; }
+  section { margin-top: 30px; scroll-margin-top: 74px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .sec-head h2 { font-size: 17px; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  .sec-head p { margin: 0; color: var(--ink-2); font-size: 12.5px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: var(--shadow); padding: 16px 18px;
+  }
+  .grid { display: grid; gap: 14px; }
+
+  /* ---------- KPI strip ---------- */
+  #kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(196px, 1fr)); gap: 14px; margin-top: 18px; }
+  .kpi .eyebrow { display: block; margin-bottom: 7px; }
+  .kpi .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  .kpi .v small { font-size: 13px; font-weight: 600; color: var(--ink-2); letter-spacing: 0; }
+  .kpi .sub { font-size: 12px; color: var(--ink-2); margin-top: 5px; }
+  .kpi .sub b { color: var(--ink); }
+
+  /* ---------- chips & severity ---------- */
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; border-radius: 999px;
+    font: 700 11px var(--mono); letter-spacing: .04em; padding: 2px 9px;
+  }
+  .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .chip.good { color: var(--good); background: var(--good-bg); }
+  .chip.warn { color: var(--warn); background: var(--warn-bg); }
+  .chip.serious { color: var(--serious); background: var(--serious-bg); }
+  .chip.crit { color: var(--crit); background: var(--crit-bg); }
+
+  /* ---------- alerts ---------- */
+  .two-col { display: grid; grid-template-columns: minmax(340px, 5fr) 7fr; gap: 14px; align-items: start; }
+  @media (max-width: 980px) { .two-col { grid-template-columns: 1fr; } }
+  .alert { display: grid; grid-template-columns: 4px 1fr auto; gap: 12px; padding: 11px 12px 11px 0; border-top: 1px solid var(--line-2); }
+  .alert:first-of-type { border-top: 0; }
+  .alert .stripe { border-radius: 2px; }
+  .alert.crit .stripe { background: var(--crit); } .alert.serious .stripe { background: var(--serious); }
+  .alert.warn .stripe { background: var(--warn); } .alert.good .stripe { background: var(--good); }
+  .alert h4 { margin: 0 0 2px; font-size: 13px; }
+  .alert p { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+  .alert .act { font-size: 12px; color: var(--accent); font-weight: 600; align-self: center; white-space: nowrap; }
+  .alert[role="button"] { cursor: pointer; }
+  .alert[role="button"]:hover h4 { color: var(--accent); }
+
+  /* ---------- charts ---------- */
+  .chart-card h3 { margin: 0 0 2px; font-size: 13.5px; }
+  .chart-card .sub { color: var(--ink-2); font-size: 12px; margin: 0 0 8px; }
+  .chart-wrap { position: relative; overflow-x: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 4px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
+  .legend i { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+  #tooltip {
+    position: fixed; z-index: 60; pointer-events: none; display: none;
+    background: var(--ink); color: var(--bg); border-radius: 7px; padding: 7px 10px;
+    font: 12px/1.45 var(--sans); box-shadow: var(--shadow); max-width: 280px;
+  }
+  #tooltip .num { color: inherit; }
+  svg text { font-family: var(--sans); }
+  svg .tick { fill: var(--ink-2); font-size: 11px; font-family: var(--mono); }
+  svg .axis { stroke: var(--line); }
+  svg .grid-l { stroke: var(--line-2); }
+
+  /* ---------- bureau table ---------- */
+  .bureau { display: grid; grid-template-columns: 7fr 5fr; gap: 14px; align-items: start; }
+  @media (max-width: 1080px) { .bureau { grid-template-columns: 1fr; } }
+  .tbl-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  thead th {
+    text-align: right; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3); font-weight: 600; padding: 6px 10px;
+    border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  thead th:first-child { text-align: left; }
+  thead th[aria-sort]:not([aria-sort="none"]) { color: var(--accent); }
+  tbody td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); text-align: right; white-space: nowrap; }
+  tbody td:first-child { text-align: left; font-weight: 600; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover td { background: var(--card-2); }
+  tbody tr.sel td { background: var(--accent-soft); }
+  .spark { vertical-align: middle; }
+
+  .detail h3 { margin: 0; font-size: 15px; }
+  .detail .meta { color: var(--ink-2); font-size: 12.5px; margin: 2px 0 10px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 10px 0 4px; }
+  .facts div { background: var(--card-2); border-radius: 8px; padding: 8px 10px; }
+  .facts .eyebrow { display: block; margin-bottom: 4px; }
+  .facts .f { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; }
+  .note { font-size: 12px; color: var(--ink-2); border-top: 1px dashed var(--line); margin-top: 10px; padding-top: 9px; }
+  .note b { color: var(--ink); }
+
+  /* ---------- network ---------- */
+  .map-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 8px; font-size: 12px; color: var(--ink-2); align-items: center; }
+  .map-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .net-node { cursor: pointer; }
+  .net-node:hover { stroke: var(--ink); stroke-width: 1.5; }
+
+  footer { margin-top: 44px; color: var(--ink-3); font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+  footer a { color: var(--accent); }
+</style>
+
+<header>
+  <div class="brand"><b>Crow&rsquo;s Nest</b><span>portfolio risk console</span></div>
+  <nav aria-label="Sections">
+    <a href="#overview">Overview</a><a href="#signals">Signals</a><a href="#map">Market map</a>
+    <a href="#bureau">Offtaker bureau</a><a href="#bench">Benchmarks</a><a href="#coverage">Coverage</a>
+  </nav>
+  <div class="bar-right">
+    <span class="demo-tag">synthetic demo data</span>
+    <label class="eyebrow" for="commodity" style="letter-spacing:.1em">Commodity</label>
+    <div class="seg" role="group" aria-label="Commodity" id="commodity">
+      <button data-c="cocoa" aria-pressed="true">Cocoa</button>
+      <button data-c="coffee" aria-pressed="false">Coffee</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="overview" style="margin-top:6px">
+    <div id="kpis"></div>
+  </section>
+
+  <section id="signals">
+    <div class="sec-head"><h2>Alerts &amp; portfolio-wide signals</h2><p>what no single participant can see — reconciled monthly from borrowing-base certificates</p></div>
+    <div class="two-col">
+      <div class="card" id="alerts" aria-label="Active alerts"></div>
+      <div class="grid" style="grid-template-columns:1fr; gap:14px">
+        <div class="card chart-card">
+          <h3>Inventory index by origin</h3>
+          <p class="sub">portfolio-financed stock, indexed to 100 twelve months ago — synchronized build is demand softening before it prints in terminal markets</p>
+          <div class="legend" id="lg-inv"></div>
+          <div class="chart-wrap"><svg id="ch-inv"></svg></div>
+        </div>
+        <div class="card chart-card">
+          <h3>Gross margin by route</h3>
+          <p class="sub">median financed margin, USD/t — several books compressing on one route signals a new entrant or differential shift</p>
+          <div class="legend" id="lg-mar"></div>
+          <div class="chart-wrap"><svg id="ch-mar"></svg></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="map">
+    <div class="sec-head"><h2>Market map</h2><p>the visible graph V — origins &rarr; financed borrowers &rarr; offtakers, sized by volume; click a node to trace its flows</p></div>
+    <div class="card chart-card">
+      <div class="chart-wrap"><svg id="ch-net" aria-label="Market network map"></svg></div>
+      <div class="map-legend" id="net-legend"></div>
+    </div>
+  </section>
+
+  <section id="bureau">
+    <div class="sec-head"><h2>Offtaker bureau</h2><p>payment behavior across every borrower that sells to each buyer — the private credit bureau on the demand tier</p></div>
+    <div class="bureau">
+      <div class="card">
+        <div class="tbl-wrap">
+          <table id="tbl-bureau" aria-label="Offtaker bureau">
+            <thead><tr>
+              <th data-k="name" aria-sort="none">Offtaker</th>
+              <th data-k="vol" aria-sort="descending">Volume kt</th>
+              <th data-k="borrowers" aria-sort="none">Borrowers</th>
+              <th data-k="recv" aria-sort="none">Receivables $M</th>
+              <th data-k="over60" aria-sort="none">&gt;60d %</th>
+              <th data-k="trend" aria-sort="none">12m aging</th>
+              <th data-k="score" aria-sort="none">Score</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="note" id="bureau-note"></p>
+      </div>
+      <div class="card detail" id="detail"></div>
+    </div>
+  </section>
+
+  <section id="bench">
+    <div class="sec-head"><h2>Route benchmarks</h2><p>place any borrower&rsquo;s transacted terms inside the portfolio&rsquo;s cross-sectional distribution</p></div>
+    <div class="card chart-card">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:6px">
+        <label>Route&nbsp;<select id="sel-route"></select></label>
+        <label>Borrower&nbsp;<select id="sel-borrower"></select></label>
+      </div>
+      <h3 id="bench-title"></h3>
+      <p class="sub" id="bench-sub"></p>
+      <div class="chart-wrap"><svg id="ch-bench"></svg></div>
+    </div>
+  </section>
+
+  <section id="coverage">
+    <div class="sec-head"><h2>Coverage &amp; the unseen market</h2><p>how much of the market the book illuminates, and how big the rest provably is</p></div>
+    <div class="grid" style="grid-template-columns: 7fr 5fr">
+      <div class="card chart-card">
+        <h3>Accumulation: what the next borrower buys you</h3>
+        <p class="sub">offtaker names and tier volume illuminated as borrowers are added (portfolio order, cumulative)</p>
+        <div class="legend" id="lg-cov"></div>
+        <div class="chart-wrap"><svg id="ch-cov"></svg></div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr; gap:14px; align-content:start">
+        <div class="card kpi" id="unseen-tile"></div>
+        <div class="card chart-card">
+          <h3>Demand concentration</h3>
+          <p class="sub">share of visible tier volume, top offtakers</p>
+          <div class="chart-wrap"><svg id="ch-conc"></svg></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Crow&rsquo;s Nest renders the model in <i>docs/borrowing-base-market-knowledge.md</i>: visible graph V(P), penetration &pi;, coverage C, Chao lower bound, cross-validation density &rho;.
+    All figures here are seeded synthetic demonstration data; wire the loaders in <code>makeWorld()</code> to certificate feeds to go live.
+  </footer>
+</main>
+
+<div id="tooltip" role="tooltip"></div>
+
+<script>
+"use strict";
+/* ================= seeded world generation (commodity-agnostic) ================ */
+function mulberry32(seed){ return function(){ seed|=0; seed=(seed+0x6D2B79F5)|0;
+  let t=Math.imul(seed^(seed>>>15),1|seed); t=(t+Math.imul(t^(t>>>7),61|t))^t;
+  return ((t^(t>>>14))>>>0)/4294967296; }; }
+function gauss(r){ let u=0,v=0; while(!u)u=r(); while(!v)v=r();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function lognorm(r,mu,sig){ return Math.exp(mu+sig*gauss(r)); }
+function pick(r,a){ return a[Math.floor(r()*a.length)]; }
+function fmt(x,d=0){ return x.toLocaleString("en-US",{maximumFractionDigits:d,minimumFractionDigits:d}); }
+
+const COMMODITIES = {
+  cocoa:  { label:"Cocoa",  Q:5000,  unit:"kt", origins:["Côte d’Ivoire","Ghana","Ecuador","Nigeria","Cameroon","Indonesia"],
+            sectors:["Grinder","Chocolate maker","Trader-processor","Food group"] },
+  coffee: { label:"Coffee", Q:10000, unit:"kt", origins:["Brazil","Vietnam","Colombia","Ethiopia","Honduras","Uganda"],
+            sectors:["Roaster","Soluble producer","Retail group","Trader-processor"] },
+};
+const NAME_A=["Meridian","Atlas","Cordillera","Harbor","Northfield","Sable","Auric","Veld","Lantern","Casca","Terral","Bruma","Orient","Pacifica","Alto","Verdant","Kestrel","Solano","Marrow","Ironwood","Delta","Cinder","Halcyon","Boreal","Vega","Linden","Tamarind","Coral","Granite","Osprey"];
+const NAME_B=["Foods","Commodities","Processing","Ingredients","Trading","Industries","Group","Partners","Mills","Beverage","Consumer","Holdings","Brands","Sourcing","Supply"];
+const BORR_A=["Andes","Gulf","Sahel","Equator","Monsoon","Harmattan","Littoral","Plateau","Savanna","Delta","Meseta","Tropic","Basin","Cape","Isthmus","Highland","Lagoon","Sierra","Valley","Coast"];
+const BORR_B=["Trade Co","Commodities","Sourcing","Merchants","Export House","Trading","Origination","Supply Co"];
+
+function makeWorld(cKey){
+  const C=COMMODITIES[cKey], r=mulberry32(cKey==="cocoa"?20260809:19700101);
+  const M=24, months=[...Array(M)].map((_,i)=>{const d=new Date(Date.UTC(2026,7-M+1+i,1));
+    return d.toLocaleString("en-US",{month:"short",year:"2-digit",timeZone:"UTC"});});
+
+  /* offtakers: heavy-tailed pool of 300 */
+  const NO=300, off=[];
+  for(let i=0;i<NO;i++){
+    const size=lognorm(r,0,1.5);
+    off.push({ id:i, name:`${pick(r,NAME_A)} ${pick(r,NAME_B)}`, sector:pick(r,C.sectors),
+      size, region:pick(r,["EU","N.America","Asia","MEA","LatAm"]),
+      baseOver60: 2+r()*7, drift:0, vol:0, borrowers:new Set(), recv:0 });
+  }
+  const names=new Set(); off.forEach(o=>{ while(names.has(o.name)) o.name=`${pick(r,NAME_A)} ${pick(r,NAME_B)}`; names.add(o.name); });
+  const sumSize=off.reduce((s,o)=>s+o.size,0);
+
+  /* 3 deteriorating names among the mid-large tier */
+  const bigIdx=off.map((o,i)=>[o.size,i]).sort((a,b)=>b[0]-a[0]).slice(4,40).map(x=>x[1]);
+  const deteriorating=[bigIdx[2],bigIdx[9],bigIdx[17]];
+  deteriorating.forEach((i,k)=>{ off[i].drift=(k===0?1.9:1.1)+r()*0.5; });
+
+  /* borrowers: 100 mid-size traders */
+  const NB=100, borrowers=[];
+  const wsample=(k,w)=>{ // weighted sample w/o replacement (Efraimidis-Spirakis)
+    return w.map((wt,i)=>[Math.pow(r(),1/wt),i]).sort((a,b)=>b[0]-a[0]).slice(0,k).map(x=>x[1]); };
+  for(let b=0;b<NB;b++){
+    const origin=pick(r,C.origins), origin2=r()<0.35?pick(r,C.origins):null;
+    const thr=Math.max(6, lognorm(r, Math.log(C.Q*0.45/NB), 0.55)); // kt/yr
+    const k=10+Math.floor(r()*41);
+    const offIds=wsample(k, off.map(o=>o.size));
+    const shares=offIds.map(()=>r()+0.15), ssum=shares.reduce((a,x)=>a+x,0);
+    const sales=offIds.map((id,j)=>({ off:id, vol: thr*shares[j]/ssum }));
+    const name=`${pick(r,BORR_A)} ${pick(r,BORR_B)}`;
+    borrowers.push({ id:b, name:`${name} (${origin.split(" ")[0].replace("’","")})`, origin, origin2,
+      thr, sales, nSup:50+Math.floor(r()*151), marginBase: 55+gauss(r)*10 });
+    sales.forEach(s=>{ off[s.off].vol+=s.vol; off[s.off].borrowers.add(b); });
+  }
+  borrowers.forEach(b=>{ b.recv = b.thr*0.22*(2600+((cKey==="coffee")?900:0))/1000; }); // $M receivables outstanding approx
+  off.forEach(o=>{ o.recv = o.vol*0.22*((cKey==="coffee")?3.5:2.6); });
+
+  /* aging paths per offtaker (over-60-day share, %) */
+  off.forEach(o=>{
+    o.aging=[...Array(M)].map((_,t)=>{
+      const seasonal=1.5*Math.sin((t/12)*2*Math.PI);
+      const worsen=o.drift? o.drift*Math.max(0,t-(M-9))*1.15 : 0;
+      return Math.max(0.4, o.baseOver60+seasonal+gauss(r)*0.9+worsen);
+    });
+    o.over60=o.aging[M-1];
+    o.trend=o.aging[M-1]-o.aging[M-13];
+    const level=Math.min(40,o.over60), tr=Math.max(0,o.trend);
+    o.score=Math.max(5, Math.round(100 - level*2.1 - tr*6 - (r()*6)));
+    o.grade = o.score>=80?"A":o.score>=65?"B":o.score>=45?"C":"D";
+  });
+
+  /* origin inventory index; last 4 months synchronized build */
+  const invSeries=C.origins.map((org,oi)=>{
+    let v=100+gauss(r)*3; const arr=[];
+    for(let t=0;t<M;t++){
+      const seasonal=6*Math.sin(((t+oi)/12)*2*Math.PI);
+      const build=t>=M-4? (t-(M-5))*3.1 : 0;
+      v=100+seasonal+gauss(r)*2.2+build+(oi-2)*1.2; arr.push(v);
+    }
+    return { name:org, values:arr };
+  });
+
+  /* routes & margins */
+  const routes=C.origins.slice(0,4).map(o=>`${o} → EU`);
+  const marSeries=routes.map((rt,ri)=>{
+    const base=52+ri*7+gauss(r)*3; const arr=[];
+    for(let t=0;t<M;t++){
+      const squeeze=(ri===1&&t>=M-6)? (t-(M-7))*2.4 : 0;
+      arr.push(base+4*Math.sin((t+ri)/3.2)+gauss(r)*1.6-squeeze);
+    }
+    return { name:rt, values:arr };
+  });
+  /* per-borrower current margin on its main route (for benchmark strip) */
+  borrowers.forEach(b=>{
+    b.route=`${b.origin} → EU`;
+    const ri=routes.indexOf(b.route);
+    const routeNow=ri>=0? marSeries[ri].values[M-1] : 55;
+    b.margin=routeNow+gauss(r)*6+(b.marginBase-55)*0.35;
+  });
+
+  /* double-pledge: one cooperative appears in 3 borrowers' collateral */
+  const dpBorrowers=[7,31,64].map(i=>borrowers[i]);
+  const dp={ name:`${pick(r,["Kavu","Sundo","Ambe","Rio Claro","Nyame"])} Cooperative`,
+    origin:dpBorrowers[0].origin, borrowers:dpBorrowers, amount: 3.4+r()*2 };
+
+  /* coverage accumulation over the actual portfolio + Chao bound */
+  const seen=new Map(); let volSeen=0;
+  const covNames=[], covVol=[];
+  const totalTierVol=off.reduce((s,o)=>s+o.size,0);
+  borrowers.forEach(b=>{
+    b.sales.forEach(s=>{ if(!seen.has(s.off)){ seen.set(s.off,0); volSeen+=off[s.off].size; }
+      seen.set(s.off, seen.get(s.off)+1); });
+    covNames.push(seen.size); covVol.push(100*volSeen/totalTierVol);
+  });
+  let f1=0,f2=0; seen.forEach(v=>{ if(v===1)f1++; else if(v===2)f2++; });
+  const D=seen.size, chao=Math.round(D + f1*(f1-1)/(2*(f2+1)));
+  const multiShare=100*(D-f1)/D;
+
+  const financed=borrowers.reduce((s,b)=>s+b.thr,0);
+  return { C, months, off, borrowers, invSeries, marSeries, routes, dp,
+    cov:{names:covNames, vol:covVol, D, chao, multiShare, NO},
+    kpi:{ financed, pi:100*financed/C.Q,
+      volCov: covVol[NB-1], recvTotal: borrowers.reduce((s,b)=>s+b.recv,0) } };
+}
+
+/* ============================ chart helpers ============================ */
+const NS="http://www.w3.org/2000/svg";
+const tip=document.getElementById("tooltip");
+function showTip(html,x,y){ tip.innerHTML=html; tip.style.display="block";
+  const w=tip.offsetWidth,h=tip.offsetHeight;
+  tip.style.left=Math.min(innerWidth-w-10, x+14)+"px";
+  tip.style.top=(y-h-12<8? y+16 : y-h-12)+"px"; }
+function hideTip(){ tip.style.display="none"; }
+function el(n,attrs,parent){ const e=document.createElementNS(NS,n);
+  for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent)parent.appendChild(e); return e; }
+const SERIES=()=>["--s1","--s2","--s3","--s4","--s5","--s6"].map(v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+
+function lineChart(svgId, legendId, series, months, opts={}){
+  const svg=document.getElementById(svgId); svg.innerHTML="";
+  const W=opts.w||620, H=opts.h||240, ml=46, mr=14, mt=12, mb=26;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`); svg.style.width="100%"; svg.style.minWidth="480px"; svg.style.height="auto";
+  const cols=SERIES();
+  const all=series.flatMap(s=>s.values);
+  let lo=opts.y0!==undefined?opts.y0:Math.min(...all), hi=opts.y1!==undefined?opts.y1:Math.max(...all);
+  const pad=(hi-lo)*0.12||1; if(opts.y0===undefined) lo-=pad; if(opts.y1===undefined) hi+=pad;
+  const X=i=>ml+i/(months.length-1)*(W-ml-mr), Y=v=>H-mb-(v-lo)/(hi-lo)*(H-mt-mb);
+  const ticks=4;
+  for(let i=0;i<=ticks;i++){ const v=lo+(hi-lo)*i/ticks;
+    el("line",{x1:ml,x2:W-mr,y1:Y(v),y2:Y(v),class:"grid-l","stroke-width":1},svg);
+    el("text",{x:ml-7,y:Y(v)+4,"text-anchor":"end",class:"tick"},svg).textContent=fmt(v,0); }
+  el("line",{x1:ml,x2:W-mr,y1:H-mb,y2:H-mb,class:"axis","stroke-width":1.2},svg);
+  const numericX=months.every(m=>!isNaN(+m));
+  if(numericX){
+    const span=+months[months.length-1], every=[2,5,10,20,25,50].find(s=>span/s<=8)||50;
+    months.forEach((m,i)=>{ if(+m%every!==0) return;
+      el("text",{x:X(i),y:H-mb+16,"text-anchor":"middle",class:"tick"},svg).textContent=m; });
+  } else {
+    const step=Math.max(1,Math.ceil(months.length/7));
+    months.forEach((m,i)=>{ if(i%step!==(months.length-1)%step) return;
+      el("text",{x:X(i),y:H-mb+16,"text-anchor":"middle",class:"tick"},svg).textContent=m; });
+  }
+  series.forEach((s,si)=>{
+    const c=s.color||cols[si%cols.length];
+    el("polyline",{points:s.values.map((v,i)=>`${X(i)},${Y(v)}`).join(" "),fill:"none",
+      stroke:c,"stroke-width":2,"stroke-linejoin":"round","stroke-linecap":"round",
+      "stroke-dasharray":s.dash||"none"},svg);
+  });
+  if(legendId){ const lg=document.getElementById(legendId); lg.innerHTML="";
+    series.forEach((s,si)=>{ const c=s.color||cols[si%cols.length];
+      const sp=document.createElement("span"); sp.innerHTML=`<i style="background:${c}"></i>${s.name}`; lg.appendChild(sp); }); }
+  /* crosshair + tooltip */
+  const hover=el("line",{y1:mt,y2:H-mb,stroke:"currentColor","stroke-width":1,"stroke-dasharray":"3 3",opacity:0},svg);
+  const dots=series.map((s,si)=>el("circle",{r:3.5,fill:s.color||cols[si%cols.length],opacity:0},svg));
+  svg.addEventListener("pointermove",ev=>{
+    const r=svg.getBoundingClientRect(), fx=(ev.clientX-r.left)*W/r.width;
+    const i=Math.max(0,Math.min(months.length-1,Math.round((fx-ml)/(W-ml-mr)*(months.length-1))));
+    hover.setAttribute("x1",X(i)); hover.setAttribute("x2",X(i)); hover.setAttribute("opacity",.5);
+    let html=`<b>${months[i]}</b>`;
+    series.forEach((s,si)=>{ dots[si].setAttribute("cx",X(i)); dots[si].setAttribute("cy",Y(s.values[i])); dots[si].setAttribute("opacity",1);
+      html+=`<br>${s.name}: <b class="num">${fmt(s.values[i],1)}${opts.suffix||""}</b>`; });
+    showTip(html,ev.clientX,ev.clientY);
+  });
+  svg.addEventListener("pointerleave",()=>{ hideTip(); hover.setAttribute("opacity",0); dots.forEach(d=>d.setAttribute("opacity",0)); });
+}
+
+function sparkline(values, w=84, h=22, color){
+  const lo=Math.min(...values), hi=Math.max(...values), pad=(hi-lo)||1;
+  const pts=values.map((v,i)=>`${(i/(values.length-1)*(w-4)+2).toFixed(1)},${(h-3-(v-lo)/pad*(h-6)).toFixed(1)}`);
+  const last=pts[pts.length-1].split(",");
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+    <polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="2.4" fill="${color}"/></svg>`;
+}
+
+/* ============================ views ============================ */
+let world, selOfftaker=null, selNetNode=null;
+
+function statusColor(g){ return {A:"var(--good)",B:"var(--s1)",C:"var(--warn)",D:"var(--crit)"}[g]; }
+function gradeChip(o){ const cls=o.grade==="A"?"good":o.grade==="B"?"good":o.grade==="C"?"warn":"crit";
+  return `<span class="chip ${cls}">${o.grade} · ${o.score}</span>`; }
+
+function renderKPIs(){
+  const k=world.kpi, c=world.cov, C=world.C;
+  const alerts=collectAlerts();
+  const critN=alerts.filter(a=>a.sev==="crit").length, serN=alerts.filter(a=>a.sev==="serious").length;
+  document.getElementById("kpis").innerHTML=[
+    { l:"Financed throughput", v:`${fmt(k.financed)}<small> kt/yr</small>`,
+      s:`<b>π = ${k.pi.toFixed(1)}%</b> of ${fmt(C.Q)} kt global ${C.label.toLowerCase()} flow` },
+    { l:"Volume coverage", v:`${k.volCov.toFixed(1)}<small>%</small>`,
+      s:`of demand-tier flow crosses a financed ledger` },
+    { l:"Offtakers on the map", v:`${c.D}<small> named</small>`,
+      s:`pool provably ≥ <b>${c.chao}</b> (Chao lower bound)` },
+    { l:"Cross-validated", v:`${c.multiShare.toFixed(0)}<small>%</small>`,
+      s:`of visible offtakers seen by <b>2+</b> borrowers` },
+    { l:"Receivables outstanding", v:`$${fmt(k.recvTotal)}<small> M</small>`,
+      s:`across <b>${world.borrowers.length}</b> borrowers, ${C.origins.length} origins` },
+    { l:"Open alerts", v:`${critN+serN}<small> need action</small>`,
+      s:`<b>${critN}</b> critical · <b>${serN}</b> serious · ${alerts.length-critN-serN} watch` },
+  ].map(t=>`<div class="card kpi"><span class="eyebrow">${t.l}</span><div class="v">${t.v}</div><div class="sub">${t.s}</div></div>`).join("");
+}
+
+function collectAlerts(){
+  const a=[], dp=world.dp, M=world.months.length;
+  a.push({ sev:"crit", t:`Possible double pledge — ${dp.name}`,
+    d:`${dp.origin} cooperative appears in the collateral of ${dp.borrowers.map(b=>b.name.split(" (")[0]).join(", ")}; overlapping pledged value ≈ $${dp.amount.toFixed(1)}M.`,
+    act:"Freeze eligibility", target:null });
+  world.off.filter(o=>o.drift>0).sort((x,y)=>y.trend-x.trend).forEach(o=>{
+    a.push({ sev:o.trend>8?"serious":"warn", t:`Aging deterioration — ${o.name}`,
+      d:`>60-day share ${o.over60.toFixed(1)}% (${o.trend>=0?"+":""}${o.trend.toFixed(1)} pts vs 12m ago) across ${o.borrowers.size} borrowers' ledgers.`,
+      act:"Open bureau file", target:o.id });
+  });
+  const inv=world.invSeries, avgNow=inv.reduce((s,x)=>s+x.values[M-1],0)/inv.length,
+        avgPrev=inv.reduce((s,x)=>s+x.values[M-5],0)/inv.length;
+  if(avgNow-avgPrev>6) a.push({ sev:"warn", t:"Synchronized inventory build",
+    d:`Financed stock up ${(avgNow-avgPrev).toFixed(0)} index pts in 4 months across all ${inv.length} origins — demand softening ahead of terminal prints.`,
+    act:"Review advance rates", target:null });
+  const mar=world.marSeries[1];
+  if(mar.values[M-1] < mar.values[M-7]-8) a.push({ sev:"warn", t:`Margin compression — ${mar.name}`,
+    d:`Median financed margin down $${(mar.values[M-7]-mar.values[M-1]).toFixed(0)}/t in 6 months across every book on the route.`,
+    act:"Investigate route", target:null });
+  return a;
+}
+
+function renderAlerts(){
+  const box=document.getElementById("alerts");
+  box.innerHTML=`<span class="eyebrow" style="display:block;margin-bottom:6px">Active alerts</span>`+
+    collectAlerts().map((al,i)=>`
+    <div class="alert ${al.sev}" ${al.target!==null?`role="button" tabindex="0" data-off="${al.target}"`:""}>
+      <div class="stripe"></div>
+      <div><h4>${al.t}</h4><p>${al.d}</p></div>
+      <span class="act">${al.act} →</span>
+    </div>`).join("");
+  box.querySelectorAll("[data-off]").forEach(n=>{
+    const go=()=>{ selectOfftaker(+n.dataset.off); document.getElementById("bureau").scrollIntoView(); };
+    n.addEventListener("click",go);
+    n.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();go();} });
+  });
+}
+
+/* ---------------- bureau table ---------------- */
+let sortKey="vol", sortDir=-1;
+function bureauRows(){
+  return world.off.filter(o=>o.borrowers.size>0)
+    .map(o=>({ o, name:o.name, vol:o.vol, borrowers:o.borrowers.size, recv:o.recv,
+      over60:o.over60, trend:o.trend, score:o.score }));
+}
+function renderBureau(){
+  const rows=bureauRows().sort((a,b)=>{
+    const va=a[sortKey],vb=b[sortKey];
+    return (typeof va==="string"? va.localeCompare(vb) : va-vb)*sortDir; }).slice(0,15);
+  const tb=document.querySelector("#tbl-bureau tbody");
+  tb.innerHTML=rows.map(r=>`
+    <tr data-id="${r.o.id}" tabindex="0" class="${selOfftaker===r.o.id?"sel":""}">
+      <td>${r.name}</td>
+      <td class="num">${fmt(r.vol,0)}</td>
+      <td class="num">${r.borrowers}</td>
+      <td class="num">${fmt(r.recv,0)}</td>
+      <td class="num">${r.over60.toFixed(1)}</td>
+      <td>${sparkline(r.o.aging, 84, 20, r.o.drift? "var(--crit)":"var(--s1)")}</td>
+      <td>${gradeChip(r.o)}</td>
+    </tr>`).join("");
+  tb.querySelectorAll("tr").forEach(tr=>{
+    const go=()=>selectOfftaker(+tr.dataset.id);
+    tr.addEventListener("click",go);
+    tr.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();go();} });
+  });
+  const total=bureauRows().length;
+  document.getElementById("bureau-note").innerHTML=
+    `Showing top 15 of <b>${total}</b> visible offtakers, sorted by ${ {name:"name",vol:"volume",borrowers:"borrower count",recv:"receivables",over60:"aging",trend:"aging trend",score:"score"}[sortKey] }. Click a column to re-sort, a row to open the file.`;
+}
+document.querySelectorAll("#tbl-bureau thead th").forEach(th=>{
+  th.addEventListener("click",()=>{
+    const k=th.dataset.k;
+    if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=k==="name"?1:-1; }
+    document.querySelectorAll("#tbl-bureau thead th").forEach(x=>x.setAttribute("aria-sort","none"));
+    th.setAttribute("aria-sort", sortDir===1?"ascending":"descending");
+    renderBureau();
+  });
+});
+
+function selectOfftaker(id){
+  selOfftaker=id; renderBureau(); renderDetail();
+}
+function renderDetail(){
+  const box=document.getElementById("detail");
+  const o=world.off[selOfftaker];
+  if(!o){ box.innerHTML=`<span class="eyebrow">Offtaker file</span><p class="meta">Select an offtaker to open its file.</p>`; return; }
+  const exp=world.borrowers.filter(b=>o.borrowers.has(b.id))
+    .map(b=>({ b, vol:b.sales.find(s=>s.off===o.id).vol })).sort((a,c)=>c.vol-a.vol);
+  const maxv=exp[0]?exp[0].vol:1;
+  const insured = o.grade==="A"?88 : o.grade==="B"?72 : o.grade==="C"?55 : 25;
+  const action = o.grade==="D" ? `Tighten: cap eligibility, require cover on new invoices, warn exposed borrowers to rebalance.`
+    : o.drift>0 ? `Watch: deterioration visible across ${o.borrowers.size} independent ledgers before any rating action — pre-position insurance and advise exposed borrowers.`
+    : o.grade==="A" ? `Advantage: strong payer — offer uplifted advance rates on ${o.name} receivables; allocate named-buyer insurance capacity to smaller borrowers.`
+    : `Stable: maintain current eligibility and premium tier.`;
+  box.innerHTML=`
+    <span class="eyebrow">Offtaker file</span>
+    <h3>${o.name} ${gradeChip(o)}</h3>
+    <p class="meta">${o.sector} · ${o.region} · seen independently by <b>${o.borrowers.size}</b> borrowers</p>
+    <div class="facts">
+      <div><span class="eyebrow">Volume</span><span class="f">${fmt(o.vol,0)} kt</span></div>
+      <div><span class="eyebrow">Receivables</span><span class="f">$${fmt(o.recv,0)}M</span></div>
+      <div><span class="eyebrow">&gt;60d now</span><span class="f">${o.over60.toFixed(1)}%</span></div>
+      <div><span class="eyebrow">12m Δ</span><span class="f" style="color:${o.trend>4?"var(--crit)":o.trend>1?"var(--warn)":"var(--good)"}">${o.trend>=0?"+":""}${o.trend.toFixed(1)} pts</span></div>
+      <div><span class="eyebrow">Insured</span><span class="f">${insured}%</span></div>
+    </div>
+    <h4 style="margin:12px 0 2px;font-size:12.5px">Aging path — 24 months, all creditors pooled</h4>
+    ${sparkline(o.aging, 300, 46, o.drift? "var(--crit)":"var(--s1)")}
+    <h4 style="margin:12px 0 6px;font-size:12.5px">Exposure by borrower</h4>
+    ${exp.slice(0,6).map(e=>`
+      <div style="display:grid;grid-template-columns:150px 1fr 52px;gap:8px;align-items:center;margin:3px 0">
+        <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.b.name.split(" (")[0]}</span>
+        <div style="background:var(--line-2);border-radius:4px;height:10px"><div style="width:${100*e.vol/maxv}%;background:var(--s1);height:10px;border-radius:4px"></div></div>
+        <span class="num" style="font-size:11.5px;text-align:right">${fmt(e.vol,1)} kt</span>
+      </div>`).join("")}
+    ${exp.length>6?`<p class="meta" style="margin-top:4px">+ ${exp.length-6} more borrowers</p>`:""}
+    <p class="note"><b>Suggested stance:</b> ${action}</p>`;
+}
+
+/* ---------------- network map ---------------- */
+function renderNetwork(){
+  const svg=document.getElementById("ch-net"); svg.innerHTML="";
+  const W=1280,H=560, colX={org:90, bor:520, off:1060};
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`); svg.style.width="100%"; svg.style.minWidth="900px"; svg.style.height="auto";
+  const C=world.C;
+  const topOff=world.off.filter(o=>o.borrowers.size>0).sort((a,b)=>b.vol-a.vol).slice(0,26);
+  const topBor=[...world.borrowers].sort((a,b)=>b.thr-a.thr).slice(0,20);
+  const orgY={}; C.origins.forEach((o,i)=>orgY[o]=70+i*(H-130)/Math.max(1,C.origins.length-1));
+  const borY={}; topBor.forEach((b,i)=>borY[b.id]=46+i*(H-92)/(topBor.length-1));
+  const offY={}; topOff.forEach((o,i)=>offY[o.id]=40+i*(H-80)/(topOff.length-1));
+  const gEdges=el("g",{},svg), gNodes=el("g",{},svg);
+  const inSel=(kind,id)=>!selNetNode || (selNetNode.kind===kind&&selNetNode.id===id) ||
+    (selNetNode.kind==="bor" && (kind==="off"? topBor.find(b=>b.id===selNetNode.id).sales.some(s=>s.off===id)
+                                : kind==="org"? topBor.find(b=>b.id===selNetNode.id).origin===id : false)) ||
+    (selNetNode.kind==="off" && kind==="bor" && world.off[selNetNode.id].borrowers.has(id));
+  topBor.forEach(b=>{
+    const y=borY[b.id];
+    const selB=!selNetNode||inSel("bor",b.id)||(selNetNode.kind==="off"&&world.off[selNetNode.id].borrowers.has(b.id))||(selNetNode.kind==="org"&&b.origin===selNetNode.id);
+    /* origin -> borrower */
+    [b.origin, b.origin2].filter(o=>o&&orgY[o]!==undefined).forEach(org=>{
+      const on=!selNetNode||(selNetNode.kind==="org"?selNetNode.id===org:selB);
+      el("path",{d:`M ${colX.org+10} ${orgY[org]} C ${colX.org+180} ${orgY[org]}, ${colX.bor-180} ${y}, ${colX.bor-9} ${y}`,
+        fill:"none", stroke:"var(--s3)","stroke-width":Math.max(1,Math.sqrt(b.thr)/4),
+        opacity:on?0.5:0.06},gEdges);
+    });
+    /* borrower -> offtaker */
+    b.sales.forEach(s=>{
+      if(offY[s.off]===undefined) return;
+      const on=!selNetNode||selB&&(selNetNode.kind!=="off"||selNetNode.id===s.off)||(selNetNode.kind==="off"&&selNetNode.id===s.off);
+      el("path",{d:`M ${colX.bor+9} ${y} C ${colX.bor+220} ${y}, ${colX.off-220} ${offY[s.off]}, ${colX.off-10} ${offY[s.off]}`,
+        fill:"none", stroke:"var(--s1)","stroke-width":Math.max(1,Math.sqrt(s.vol)/2.2),
+        opacity:on?0.45:0.05},gEdges);
+    });
+  });
+  const nodeTip=(html)=>ev=>showTip(html,ev.clientX,ev.clientY);
+  const clickNode=(kind,id)=>()=>{ selNetNode=(selNetNode&&selNetNode.kind===kind&&selNetNode.id===id)?null:{kind,id};
+    renderNetwork(); if(kind==="off"){ selectOfftaker(id); } };
+  C.origins.forEach(org=>{
+    const dim=selNetNode&&!(selNetNode.kind==="org"&&selNetNode.id===org)&&!(selNetNode.kind==="bor"&&topBor.find(b=>b.id===selNetNode.id&&(b.origin===org||b.origin2===org)));
+    const g=el("g",{class:"net-node",opacity:dim?0.35:1},gNodes);
+    el("circle",{cx:colX.org,cy:orgY[org],r:9,fill:"var(--s3)"},g);
+    el("text",{x:colX.org-16,y:orgY[org]+4,"text-anchor":"end","font-size":12,fill:"var(--ink)"},g).textContent=org;
+    const nb=world.borrowers.filter(b=>b.origin===org).length;
+    g.addEventListener("pointermove",nodeTip(`<b>${org}</b><br>${nb} financed borrowers at origin<br>supplier tier reached: ~${fmt(world.borrowers.filter(b=>b.origin===org).reduce((s,b)=>s+b.nSup,0))} co-ops &amp; aggregators`));
+    g.addEventListener("pointerleave",hideTip);
+    g.addEventListener("click",clickNode("org",org));
+  });
+  topBor.forEach(b=>{
+    const dim=selNetNode&&!inSel("bor",b.id)&&!(selNetNode.kind==="bor"&&selNetNode.id===b.id)&&!(selNetNode.kind==="off"&&world.off[selNetNode.id].borrowers.has(b.id))&&!(selNetNode.kind==="org"&&(b.origin===selNetNode.id||b.origin2===selNetNode.id));
+    const g=el("g",{class:"net-node",opacity:dim?0.3:1},gNodes);
+    const r=Math.max(5,Math.sqrt(b.thr)/1.7);
+    const isDP=world.dp.borrowers.some(x=>x.id===b.id);
+    el("rect",{x:colX.bor-r,y:borY[b.id]-r,width:2*r,height:2*r,rx:3,fill:"var(--accent)"},g);
+    if(isDP) el("rect",{x:colX.bor-r-3.5,y:borY[b.id]-r-3.5,width:2*r+7,height:2*r+7,rx:5,fill:"none",stroke:"var(--crit)","stroke-width":2},g);
+    g.addEventListener("pointermove",nodeTip(`<b>${b.name}</b><br>${fmt(b.thr,0)} kt/yr financed · ${b.sales.length} offtakers · ${b.nSup} suppliers${isDP?`<br><b>⚠ shares pledged collateral: ${world.dp.name}</b>`:""}`));
+    g.addEventListener("pointerleave",hideTip);
+    g.addEventListener("click",clickNode("bor",b.id));
+  });
+  topOff.forEach(o=>{
+    const dim=selNetNode&&!inSel("off",o.id)&&!(selNetNode.kind==="off"&&selNetNode.id===o.id);
+    const g=el("g",{class:"net-node",opacity:dim?0.3:1},gNodes);
+    const r=Math.max(4.5,Math.sqrt(o.vol)/1.9);
+    el("circle",{cx:colX.off,cy:offY[o.id],r,fill:statusColor(o.grade)},g);
+    if(o.borrowers.size>=2) el("circle",{cx:colX.off,cy:offY[o.id],r:r+3.5,fill:"none",stroke:"var(--ink-3)","stroke-width":1.2},g);
+    el("text",{x:colX.off+r+8,y:offY[o.id]+4,"font-size":11.5,fill:"var(--ink)"},g).textContent=o.name;
+    g.addEventListener("pointermove",nodeTip(`<b>${o.name}</b> — grade ${o.grade} (${o.score})<br>${fmt(o.vol,0)} kt from ${o.borrowers.size} borrowers · &gt;60d ${o.over60.toFixed(1)}%`));
+    g.addEventListener("pointerleave",hideTip);
+    g.addEventListener("click",clickNode("off",o.id));
+  });
+  ["origins / supplier tier","financed borrowers (top 20)","offtakers (top 26 by volume)"].forEach((t,i)=>{
+    el("text",{x:[colX.org,colX.bor,colX.off][i],y:20,"text-anchor":i===0?"start":"middle","font-size":11,
+      fill:"var(--ink-2)","font-family":"var(--mono)","letter-spacing":".08em"},svg).textContent=t.toUpperCase();
+  });
+  document.getElementById("net-legend").innerHTML=`
+    <span><i style="background:var(--s3)"></i>origin flows</span>
+    <span><i style="background:var(--accent);border-radius:3px"></i>borrower (size = throughput)</span>
+    <span><i style="background:var(--good)"></i>offtaker A/B</span>
+    <span><i style="background:var(--warn)"></i>C</span>
+    <span><i style="background:var(--crit)"></i>D / alert</span>
+    <span><i style="background:none;border:1.5px solid var(--ink-3)"></i>ring = 2+ independent views</span>
+    <span><i style="background:none;border:2px solid var(--crit);border-radius:3px"></i>red frame = shared pledged collateral</span>
+    ${selNetNode?`<button id="net-clear" style="margin-left:auto">Clear focus</button>`:""}`;
+  const clr=document.getElementById("net-clear");
+  if(clr) clr.addEventListener("click",()=>{ selNetNode=null; renderNetwork(); });
+}
+
+/* ---------------- benchmark strip ---------------- */
+function renderBench(){
+  const route=document.getElementById("sel-route").value;
+  const bSel=+document.getElementById("sel-borrower").value;
+  const peers=world.borrowers.filter(b=>b.route===route);
+  const svg=document.getElementById("ch-bench"); svg.innerHTML="";
+  const W=1180,H=190, ml=40,mr=30,mt=30,mb=34;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`); svg.style.width="100%"; svg.style.minWidth="700px"; svg.style.height="auto";
+  if(peers.length<3){ document.getElementById("bench-title").textContent="Not enough books on this route."; return; }
+  const vals=peers.map(p=>p.margin), lo=Math.min(...vals)-6, hi=Math.max(...vals)+6;
+  const X=v=>ml+(v-lo)/(hi-lo)*(W-ml-mr);
+  /* density histogram */
+  const bins=18, counts=Array(bins).fill(0);
+  vals.forEach(v=>counts[Math.min(bins-1,Math.floor((v-lo)/(hi-lo)*bins))]++);
+  const maxC=Math.max(...counts);
+  counts.forEach((c,i)=>{ if(!c)return;
+    const x0=ml+(i/bins)*(W-ml-mr), bw=(W-ml-mr)/bins;
+    el("rect",{x:x0+1,y:H-mb-(c/maxC)*(H-mt-mb),width:bw-2,height:(c/maxC)*(H-mt-mb),
+      fill:"var(--s1)",opacity:0.18,rx:3},svg); });
+  el("line",{x1:ml,x2:W-mr,y1:H-mb,y2:H-mb,class:"axis","stroke-width":1.2},svg);
+  for(let t=Math.ceil(lo/10)*10;t<=hi;t+=10){
+    el("text",{x:X(t),y:H-mb+17,"text-anchor":"middle",class:"tick"},svg).textContent="$"+t; }
+  /* peer dots */
+  const sel=world.borrowers[bSel];
+  peers.forEach(p=>{
+    const isSel=p.id===bSel;
+    const c=el("circle",{cx:X(p.margin),cy:H-mb-14-((p.id*37)%36),r:isSel?7:4.5,
+      fill:isSel?"var(--s2)":"var(--s1)",opacity:isSel?1:0.55,stroke:"var(--chart-surface)","stroke-width":1.5,class:"net-node"},svg);
+    c.addEventListener("pointermove",ev=>showTip(`<b>${p.name}</b><br>margin <b class="num">$${p.margin.toFixed(0)}/t</b> on ${route}`,ev.clientX,ev.clientY));
+    c.addEventListener("pointerleave",hideTip);
+  });
+  const below=vals.filter(v=>v<sel.margin).length, pctl=Math.round(100*below/vals.length);
+  if(sel.route===route){
+    el("line",{x1:X(sel.margin),x2:X(sel.margin),y1:mt-4,y2:H-mb,stroke:"var(--s2)","stroke-width":1.6,"stroke-dasharray":"5 4"},svg);
+    el("text",{x:X(sel.margin)+7,y:mt+6,"font-size":12,"font-weight":700,fill:"var(--s2)"},svg).textContent=`${sel.name.split(" (")[0]} — P${pctl}`;
+  }
+  document.getElementById("bench-title").textContent=`${route}: ${peers.length} financed books`;
+  document.getElementById("bench-sub").innerHTML= sel.route===route
+    ? `<b>${sel.name}</b> transacts at <b>$${sel.margin.toFixed(0)}/t</b> — the <b>${pctl}th percentile</b> of the portfolio on this route. ${pctl<20?"Terms materially worse than peers: renegotiate or investigate counterparty mix.":pctl>80?"Best-in-route economics — candidate for advance-rate uplift.":"Within the normal band for the route."}`
+    : `Selected borrower does not trade this route — dots show the route's cross-section; pick one of its books to place it.`;
+}
+
+/* ---------------- coverage & concentration ---------------- */
+function renderCoverage(){
+  const c=world.cov, B=world.borrowers.length;
+  lineChart("ch-cov","lg-cov",[
+    { name:"tier volume illuminated %", values:c.vol },
+    { name:"offtaker names %", values:c.names.map(n=>100*n/c.NO) },
+  ], [...Array(B)].map((_,i)=>String(i+1)), {h:230, y0:0, y1:102, suffix:"%"});
+  const tile=document.getElementById("unseen-tile");
+  const unseenN=c.chao-c.D;
+  tile.innerHTML=`<span class="eyebrow">The unseen market</span>
+    <div class="v num" style="font-size:26px;font-weight:700">≥ ${unseenN}<small style="font-size:13px;color:var(--ink-2)"> offtakers unfinanced</small></div>
+    <div class="sub">Chao bound from list overlap: pool ≥ <b>${c.chao}</b>, of which <b>${c.D}</b> named.
+    The names you lack carry ≈<b>${(100-world.kpi.volCov).toFixed(1)}%</b> of tier volume — the blind spot is the small tail.</div>`;
+  /* concentration bars */
+  const svg=document.getElementById("ch-conc"); svg.innerHTML="";
+  const top=world.off.filter(o=>o.borrowers.size>0).sort((a,b)=>b.vol-a.vol).slice(0,8);
+  const tot=world.off.reduce((s,o)=>s+o.vol,0);
+  const W=460,H=8+top.length*30, ml=150;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`); svg.style.width="100%"; svg.style.height="auto";
+  top.forEach((o,i)=>{
+    const share=100*o.vol/tot, y=6+i*30;
+    el("text",{x:ml-8,y:y+13,"text-anchor":"end","font-size":11.5,fill:"var(--ink)"},svg).textContent=o.name;
+    const bar=el("rect",{x:ml,y,width:(W-ml-60)*share/ (100*top[0].vol/tot),height:18,rx:4,fill:statusColor(o.grade)},svg);
+    el("text",{x:ml+(W-ml-60)*share/(100*top[0].vol/tot)+7,y:y+13,"font-size":11,class:"tick"},svg).textContent=share.toFixed(1)+"%";
+    bar.addEventListener("pointermove",ev=>showTip(`<b>${o.name}</b><br>${share.toFixed(1)}% of visible tier volume · grade ${o.grade}`,ev.clientX,ev.clientY));
+    bar.addEventListener("pointerleave",hideTip);
+  });
+}
+
+/* ============================ boot & wiring ============================ */
+function renderAll(){
+  renderKPIs(); renderAlerts();
+  lineChart("ch-inv","lg-inv", world.invSeries.map(s=>({name:s.name,values:s.values})), world.months, {h:230});
+  lineChart("ch-mar","lg-mar", world.marSeries.map(s=>({name:s.name,values:s.values})), world.months, {h:230, suffix:" $/t"});
+  renderNetwork();
+  renderBureau(); renderDetail(); renderCoverage();
+  /* benchmark selectors */
+  const selR=document.getElementById("sel-route"), selB=document.getElementById("sel-borrower");
+  selR.innerHTML=world.routes.map(rt=>`<option>${rt}</option>`).join("");
+  const onRoute=world.borrowers.filter(b=>b.route===world.routes[0]);
+  selB.innerHTML=world.borrowers.map(b=>`<option value="${b.id}">${b.name}</option>`).join("");
+  selB.value=onRoute[0].id;
+  renderBench();
+}
+document.getElementById("sel-route").addEventListener("change",renderBench);
+document.getElementById("sel-borrower").addEventListener("change",renderBench);
+document.querySelectorAll("#commodity button").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll("#commodity button").forEach(b=>b.setAttribute("aria-pressed","false"));
+    btn.setAttribute("aria-pressed","true");
+    selOfftaker=null; selNetNode=null;
+    world=makeWorld(btn.dataset.c);
+    /* preselect the headline deteriorating offtaker */
+    selOfftaker=world.off.filter(o=>o.drift>0).sort((a,b)=>b.trend-a.trend)[0].id;
+    renderAll();
+  });
+});
+world=makeWorld("cocoa");
+selOfftaker=world.off.filter(o=>o.drift>0).sort((a,b)=>b.trend-a.trend)[0].id;
+renderAll();
+</script>
