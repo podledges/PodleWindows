@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+<rect width="960" height="560" fill="#fcfcfb"/>
+<text x="24" y="30" font-size="17" font-weight="700" fill="#0b0b0b">What financing illuminates: one neighborhood vs a portfolio</text>
+<text x="24" y="49" font-size="12.5" fill="#52514e">Suppliers &#8594; traders &#8594; offtakers; financing a trader lights up its 1-hop neighborhood and monthly edge weights (volumes, prices, aging)</text>
+<text x="18" y="86" font-size="14" font-weight="600" fill="#0b0b0b">A. One borrower: an island of visibility</text>
+<line x1="60" y1="95" x2="235" y2="130" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="199" x2="235" y2="130" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="251" x2="235" y2="130" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="303" x2="235" y2="130" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="130" x2="405" y2="110" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="130" x2="405" y2="286" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="173" x2="235" y2="187" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="225" x2="235" y2="187" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="329" x2="235" y2="187" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="187" x2="405" y2="154" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="187" x2="405" y2="374" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="95" x2="235" y2="244" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="121" x2="235" y2="244" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="303" x2="235" y2="244" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="244" x2="405" y2="110" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="244" x2="405" y2="418" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="121" x2="235" y2="301" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="60" y1="173" x2="235" y2="301" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="60" y1="433" x2="235" y2="301" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="60" y1="459" x2="235" y2="301" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="235" y1="301" x2="405" y2="198" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="235" y1="301" x2="405" y2="286" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="235" y1="301" x2="405" y2="462" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="60" y1="95" x2="235" y2="358" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="121" x2="235" y2="358" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="303" x2="235" y2="358" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="329" x2="235" y2="358" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="433" x2="235" y2="358" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="358" x2="405" y2="110" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="358" x2="405" y2="154" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="358" x2="405" y2="330" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="121" x2="235" y2="415" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="329" x2="235" y2="415" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="459" x2="235" y2="415" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="415" x2="405" y2="110" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="415" x2="405" y2="154" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="415" x2="405" y2="198" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="95" x2="235" y2="472" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="121" x2="235" y2="472" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="173" x2="235" y2="472" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="60" y1="303" x2="235" y2="472" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="472" x2="405" y2="110" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="235" y1="472" x2="405" y2="330" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<path d="M 221 187 C 175 244.0, 175 244.0, 221 301" fill="none" stroke="#2a78d6" stroke-width="1.8" stroke-dasharray="4 3"/>
+<path d="M 221 244 C 175 329.5, 175 329.5, 221 415" fill="none" stroke="#e7e6e2" stroke-width="1" stroke-dasharray="4 3"/>
+<circle cx="60" cy="95" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="121" r="4.5" fill="#1baf7a"/>
+<circle cx="60" cy="147" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="173" r="4.5" fill="#1baf7a"/>
+<circle cx="60" cy="199" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="225" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="251" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="277" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="303" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="329" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="355" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="381" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="407" r="4.5" fill="#d6d5d0"/>
+<circle cx="60" cy="433" r="4.5" fill="#1baf7a"/>
+<circle cx="60" cy="459" r="4.5" fill="#1baf7a"/>
+<circle cx="60" cy="485" r="4.5" fill="#d6d5d0"/>
+<rect x="228" y="123" width="14" height="14" rx="3" fill="#d6d5d0"/>
+<rect x="228" y="180" width="14" height="14" rx="3" fill="#d6d5d0"/>
+<rect x="228" y="237" width="14" height="14" rx="3" fill="#d6d5d0"/>
+<rect x="228" y="294" width="14" height="14" rx="3" fill="#2a78d6"/>
+<circle cx="235" cy="301" r="12" fill="none" stroke="#2a78d6" stroke-width="1.4" stroke-opacity="0.5"/>
+<rect x="228" y="351" width="14" height="14" rx="3" fill="#d6d5d0"/>
+<rect x="228" y="408" width="14" height="14" rx="3" fill="#d6d5d0"/>
+<rect x="228" y="465" width="14" height="14" rx="3" fill="#d6d5d0"/>
+<circle cx="405" cy="110" r="6" fill="#d6d5d0"/>
+<circle cx="405" cy="154" r="6" fill="#d6d5d0"/>
+<circle cx="405" cy="198" r="6" fill="#1baf7a"/>
+<circle cx="405" cy="242" r="6" fill="#d6d5d0"/>
+<circle cx="405" cy="286" r="6" fill="#1baf7a"/>
+<circle cx="405" cy="330" r="6" fill="#d6d5d0"/>
+<circle cx="405" cy="374" r="6" fill="#d6d5d0"/>
+<circle cx="405" cy="418" r="6" fill="#d6d5d0"/>
+<circle cx="405" cy="462" r="6" fill="#1baf7a"/>
+<text x="60" y="70" text-anchor="middle" font-size="12" fill="#52514e">suppliers</text>
+<text x="235" y="70" text-anchor="middle" font-size="12" fill="#52514e">traders</text>
+<text x="405" y="70" text-anchor="middle" font-size="12" fill="#52514e">offtakers</text>
+<text x="498" y="86" font-size="14" font-weight="600" fill="#0b0b0b">B. Portfolio: overlapping neighborhoods</text>
+<line x1="540" y1="95" x2="715" y2="130" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="199" x2="715" y2="130" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="251" x2="715" y2="130" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="303" x2="715" y2="130" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="130" x2="885" y2="110" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="130" x2="885" y2="286" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="173" x2="715" y2="187" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="540" y1="225" x2="715" y2="187" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="540" y1="329" x2="715" y2="187" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="715" y1="187" x2="885" y2="154" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="715" y1="187" x2="885" y2="374" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="540" y1="95" x2="715" y2="244" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="121" x2="715" y2="244" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="303" x2="715" y2="244" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="244" x2="885" y2="110" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="244" x2="885" y2="418" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="121" x2="715" y2="301" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="173" x2="715" y2="301" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="433" x2="715" y2="301" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="459" x2="715" y2="301" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="301" x2="885" y2="198" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="301" x2="885" y2="286" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="301" x2="885" y2="462" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="95" x2="715" y2="358" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="121" x2="715" y2="358" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="303" x2="715" y2="358" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="329" x2="715" y2="358" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="433" x2="715" y2="358" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="358" x2="885" y2="110" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="358" x2="885" y2="154" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="358" x2="885" y2="330" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="121" x2="715" y2="415" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="540" y1="329" x2="715" y2="415" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="540" y1="459" x2="715" y2="415" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="715" y1="415" x2="885" y2="110" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="715" y1="415" x2="885" y2="154" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="715" y1="415" x2="885" y2="198" stroke="#e7e6e2" stroke-width="1" stroke-opacity="1"/>
+<line x1="540" y1="95" x2="715" y2="472" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="121" x2="715" y2="472" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="173" x2="715" y2="472" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="540" y1="303" x2="715" y2="472" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="472" x2="885" y2="110" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<line x1="715" y1="472" x2="885" y2="330" stroke="#2a78d6" stroke-width="1.8" stroke-opacity="0.75"/>
+<path d="M 701 187 C 655 244.0, 655 244.0, 701 301" fill="none" stroke="#2a78d6" stroke-width="1.8" stroke-dasharray="4 3"/>
+<path d="M 701 244 C 655 329.5, 655 329.5, 701 415" fill="none" stroke="#2a78d6" stroke-width="1.8" stroke-dasharray="4 3"/>
+<circle cx="540" cy="95" r="4.5" fill="#1baf7a"/>
+<circle cx="540" cy="121" r="4.5" fill="#1baf7a"/>
+<circle cx="540" cy="147" r="4.5" fill="#d6d5d0"/>
+<circle cx="540" cy="173" r="4.5" fill="#1baf7a"/>
+<circle cx="540" cy="199" r="4.5" fill="#1baf7a"/>
+<circle cx="540" cy="225" r="4.5" fill="#d6d5d0"/>
+<circle cx="540" cy="251" r="4.5" fill="#1baf7a"/>
+<circle cx="540" cy="277" r="4.5" fill="#d6d5d0"/>
+<circle cx="540" cy="303" r="6" fill="#e34948"/>
+<text x="552" y="307" font-size="11.5" font-weight="600" fill="#e34948" stroke="#fcfcfb" stroke-width="4" paint-order="stroke">&#9888; pledged to 3 borrowers</text>
+<circle cx="540" cy="329" r="4.5" fill="#1baf7a"/>
+<circle cx="540" cy="355" r="4.5" fill="#d6d5d0"/>
+<circle cx="540" cy="381" r="4.5" fill="#d6d5d0"/>
+<circle cx="540" cy="407" r="4.5" fill="#d6d5d0"/>
+<circle cx="540" cy="433" r="4.5" fill="#1baf7a"/>
+<circle cx="540" cy="459" r="4.5" fill="#1baf7a"/>
+<circle cx="540" cy="485" r="4.5" fill="#d6d5d0"/>
+<rect x="708" y="123" width="14" height="14" rx="3" fill="#2a78d6"/>
+<circle cx="715" cy="130" r="12" fill="none" stroke="#2a78d6" stroke-width="1.4" stroke-opacity="0.5"/>
+<rect x="708" y="180" width="14" height="14" rx="3" fill="#d6d5d0"/>
+<rect x="708" y="237" width="14" height="14" rx="3" fill="#2a78d6"/>
+<circle cx="715" cy="244" r="12" fill="none" stroke="#2a78d6" stroke-width="1.4" stroke-opacity="0.5"/>
+<rect x="708" y="294" width="14" height="14" rx="3" fill="#2a78d6"/>
+<circle cx="715" cy="301" r="12" fill="none" stroke="#2a78d6" stroke-width="1.4" stroke-opacity="0.5"/>
+<rect x="708" y="351" width="14" height="14" rx="3" fill="#2a78d6"/>
+<circle cx="715" cy="358" r="12" fill="none" stroke="#2a78d6" stroke-width="1.4" stroke-opacity="0.5"/>
+<rect x="708" y="408" width="14" height="14" rx="3" fill="#d6d5d0"/>
+<rect x="708" y="465" width="14" height="14" rx="3" fill="#2a78d6"/>
+<circle cx="715" cy="472" r="12" fill="none" stroke="#2a78d6" stroke-width="1.4" stroke-opacity="0.5"/>
+<circle cx="885" cy="110" r="6" fill="#1baf7a"/>
+<circle cx="885" cy="110" r="10" fill="none" stroke="#104281" stroke-width="2"/>
+<circle cx="885" cy="154" r="6" fill="#1baf7a"/>
+<circle cx="885" cy="198" r="6" fill="#1baf7a"/>
+<circle cx="885" cy="242" r="6" fill="#d6d5d0"/>
+<circle cx="885" cy="286" r="6" fill="#1baf7a"/>
+<circle cx="885" cy="286" r="10" fill="none" stroke="#104281" stroke-width="2"/>
+<circle cx="885" cy="330" r="6" fill="#1baf7a"/>
+<circle cx="885" cy="330" r="10" fill="none" stroke="#104281" stroke-width="2"/>
+<circle cx="885" cy="374" r="6" fill="#d6d5d0"/>
+<circle cx="885" cy="418" r="6" fill="#1baf7a"/>
+<circle cx="885" cy="462" r="6" fill="#1baf7a"/>
+<text x="540" y="70" text-anchor="middle" font-size="12" fill="#52514e">suppliers</text>
+<text x="715" y="70" text-anchor="middle" font-size="12" fill="#52514e">traders</text>
+<text x="885" y="70" text-anchor="middle" font-size="12" fill="#52514e">offtakers</text>
+<line x1="480" y1="70" x2="480" y2="500" stroke="#ecebe8" stroke-width="1.4"/>
+<rect x="24" y="525" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="42" y="535" font-size="12" fill="#0b0b0b">financed trader</text>
+<circle cx="179.0" cy="531" r="5.5" fill="#1baf7a"/>
+<text x="191.0" y="535" font-size="12" fill="#0b0b0b">visible counterparty</text>
+<circle cx="363.0" cy="531" r="5.5" fill="#d6d5d0"/>
+<text x="375.0" y="535" font-size="12" fill="#0b0b0b">dark (unobserved)</text>
+<circle cx="526.0" cy="531" r="6" fill="none" stroke="#104281" stroke-width="2"/>
+<text x="538.0" y="535" font-size="12" fill="#0b0b0b">2+ independent views</text>
+<circle cx="710.0" cy="531" r="5.5" fill="#e34948"/>
+<text x="722.0" y="535" font-size="12" fill="#0b0b0b">double-pledge alert</text>
+</svg>
