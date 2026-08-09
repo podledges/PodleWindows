@@ -46,6 +46,10 @@ with observed weight panels $\{w_t(e)\}$ on every visible edge, monthly.
 What stays dark: edges between two non-financed nodes, and anything beyond one hop.
 A mid-size trader has ~50–200 suppliers and ~10–50 offtakers, so each borrower contributes roughly 100–250 counterparties plus the quantified flows across them.
 
+Trader-to-trader edges are first-class citizens of both layers.
+A $T \to T$ edge with one financed endpoint is observed like any other 1-hop edge; a $T \to T$ edge between **two financed borrowers** is observed twice — once from each side's certificate — so the seller's receivable and the buyer's payable must reconcile, an integrity check available to no other market observer.
+The same edges make intra-portfolio credit chains explicit: a borrower's receivable from another borrower is exposure that concentrates rather than diversifies (the counterparty's default and the debtor's default are the same event inside your book), and the lender is the one party that can see, net, and limit every such chain.
+
 ![One borrower vs a portfolio of borrowers](figures/bb-network.svg)
 
 ### Layer 2 — metrics and estimators (what the observed part licenses)
