@@ -190,9 +190,15 @@ add_task() {
 # the stubbed provider on PATH. Echoes combined output; returns its exit code.
 run_control() {
   local dir=$1; shift
+  # These are poll ceilings, not fixed delays: a satisfied condition returns
+  # immediately, so raising them only extends how long a genuinely slow check
+  # is given before giving up. 0.05s was tuned for near-instant Linux
+  # subprocess spawns; this machine's real git-bash/MSYS subprocess overhead
+  # (confirmed elsewhere: git worktree adds, mklink calls) regularly exceeds
+  # that, so acknowledgement/settle waits need real headroom here.
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
-    FM_CONTROL_POLL=0.01 FM_CONTROL_SETTLE_WAIT=0.05 \
-    FM_CONTROL_EXIT_WAIT=0.05 FM_CONTROL_LAUNCH_WAIT=0.05 \
+    FM_CONTROL_POLL=0.02 FM_CONTROL_SETTLE_WAIT=2 \
+    FM_CONTROL_EXIT_WAIT=2 FM_CONTROL_LAUNCH_WAIT=2 \
     FM_FAKE_MUSE_LOG="${FM_FAKE_MUSE_LOG:-}" \
     FM_FAKE_MUSE_DISAPPEAR_BEFORE_ACK="${FM_FAKE_MUSE_DISAPPEAR_BEFORE_ACK:-}" \
     FM_FAKE_INTERRUPT_STOPS_AGENT="${FM_FAKE_INTERRUPT_STOPS_AGENT:-}" \
@@ -710,7 +716,10 @@ test_muse_interrupt_confirms_adapter_acknowledgement() {
   add_task "$dir" t1 muse
   alive_as "$dir" muse
   root="$dir/muse-sessions"
-  log="$root/2026/08/08/session-1/session.jsonl"
+  # fm_busy_muse_namespace_day (bin/fm-busy-lib.sh) discovers a session log
+  # under today's real date, not a fixed one, so this fixture must match it
+  # instead of a date that will drift stale the day after it is written.
+  log="$root/$(date '+%Y/%m/%d')/session-1/session.jsonl"
   mkdir -p "$(dirname "$log")"
   printf '%s\n' \
     "{\"schema_version\":1,\"payload_type\":\"runtime.session.metadata\",\"payload\":{\"kind\":\"metadata\",\"record\":{\"workspace_root\":\"$dir/wt-t1\"}}}" \
@@ -730,7 +739,10 @@ test_interrupt_revalidates_agent_after_acknowledgement_wait() {
   add_task "$dir" t1 muse
   alive_as "$dir" muse
   root="$dir/muse-sessions"
-  log="$root/2026/08/08/session-1/session.jsonl"
+  # fm_busy_muse_namespace_day (bin/fm-busy-lib.sh) discovers a session log
+  # under today's real date, not a fixed one, so this fixture must match it
+  # instead of a date that will drift stale the day after it is written.
+  log="$root/$(date '+%Y/%m/%d')/session-1/session.jsonl"
   mkdir -p "$(dirname "$log")"
   printf '%s\n' \
     "{\"schema_version\":1,\"payload_type\":\"runtime.session.metadata\",\"payload\":{\"kind\":\"metadata\",\"record\":{\"workspace_root\":\"$dir/wt-t1\"}}}" \

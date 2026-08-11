@@ -303,3 +303,101 @@ assert_absent() {
 assert_present() {
   [ -e "$1" ] || fail "$2"
 }
+
+# --- platform capability probes ----------------------------------------------
+#
+# One-time, cheap probes for Windows/Git-Bash/MSYS platform gaps discovered
+# 2026-08-12 while triaging tests that only failed on this box. Each memoizes
+# into a global on first call so repeat calls within one test file are
+# instant. Call these instead of re-deriving the same probe inline, and use
+# fm_test_platform_skip in a not-supported branch rather than failing on a
+# platform limitation neither the test nor production code controls.
+
+FM_TEST_PLATFORM_SYMLINKS=
+# fm_test_platform_symlinks_supported: 0 if this account can create a real,
+# `-L`-detectable FILE symlink. On an unprivileged Windows account (no admin,
+# Developer Mode off) `ln -s` still exits 0 but silently produces a plain copy
+# instead - confirmed directly, and via `New-Item -ItemType SymbolicLink`
+# failing with "Administrator privilege required". Directory targets have a
+# working unprivileged fallback already (fm_lock_symlink in bin/fm-wake-lib.sh,
+# uses `mklink /J` junctions); this probe is for the FILE case, which has none.
+fm_test_platform_symlinks_supported() {
+  if [ -z "$FM_TEST_PLATFORM_SYMLINKS" ]; then
+    local probe
+    probe=$(mktemp -d) || return 1
+    printf 'x\n' > "$probe/t"
+    ln -s "$probe/t" "$probe/l" 2>/dev/null
+    if [ -L "$probe/l" ]; then
+      FM_TEST_PLATFORM_SYMLINKS=1
+    else
+      FM_TEST_PLATFORM_SYMLINKS=0
+    fi
+    rm -rf "$probe"
+  fi
+  [ "$FM_TEST_PLATFORM_SYMLINKS" = 1 ]
+}
+
+FM_TEST_PLATFORM_PS_O=
+# fm_test_platform_ps_o_supported: 0 if the native `ps` on PATH accepts a
+# custom -o output format (e.g. `-o pid=,command=`). This machine's
+# /usr/bin/ps is a minimal Cygwin-style build that rejects -o entirely
+# ("ps: unknown option -- o") - confirmed directly. Code that needs portable
+# process inspection here falls back to PowerShell/Get-CimInstance
+# (fm_remote_job_native_ps_bin in bin/fm-remote-job-lib.sh is the precedent).
+fm_test_platform_ps_o_supported() {
+  if [ -z "$FM_TEST_PLATFORM_PS_O" ]; then
+    if ps -p "$$" -o pid= >/dev/null 2>&1; then
+      FM_TEST_PLATFORM_PS_O=1
+    else
+      FM_TEST_PLATFORM_PS_O=0
+    fi
+  fi
+  [ "$FM_TEST_PLATFORM_PS_O" = 1 ]
+}
+
+FM_TEST_PLATFORM_SPAWN_MS=
+# fm_test_platform_spawn_overhead_ms: rough per-process spawn cost on this box
+# in whole milliseconds, averaged over 10 trivial `bash -c true` spawns.
+# Git-bash/MSYS subprocess spawn is measurably slower than the Linux CI most
+# poll/settle budgets in this suite were tuned for (confirmed: a 40-way
+# lock-contention test's dead-owner reclaim took up to ~6s here where a
+# `sleep 1` "stay alive" window assumed sub-second resolution). Use this to
+# judge whether a poll ceiling is proportionate before widening it blindly -
+# it is a rough order-of-magnitude number, not a tight bound.
+fm_test_platform_spawn_overhead_ms() {
+  if [ -z "$FM_TEST_PLATFORM_SPAWN_MS" ]; then
+    local start end i=0 samples=10
+    start=$(date +%s%N 2>/dev/null || true)
+    case "$start" in
+      '' | *[!0-9]*)
+        # No nanosecond date resolution (e.g. some BSD/macOS date builds):
+        # fall back to whole-second timing over more iterations for a usable
+        # average.
+        samples=100
+        start=$(date +%s)
+        while [ "$i" -lt "$samples" ]; do
+          bash -c 'true'
+          i=$((i + 1))
+        done
+        end=$(date +%s)
+        FM_TEST_PLATFORM_SPAWN_MS=$(( (end - start) * 1000 / samples ))
+        ;;
+      *)
+        while [ "$i" -lt "$samples" ]; do
+          bash -c 'true'
+          i=$((i + 1))
+        done
+        end=$(date +%s%N)
+        FM_TEST_PLATFORM_SPAWN_MS=$(( (end - start) / samples / 1000000 ))
+        ;;
+    esac
+  fi
+  printf '%s' "$FM_TEST_PLATFORM_SPAWN_MS"
+}
+
+# fm_test_platform_skip <label> <reason>: a consistent, greppable skip notice
+# (not a pass/fail) for a sub-case a platform gap makes impossible to exercise
+# here.
+fm_test_platform_skip() {
+  printf 'skip - %s unsupported: %s\n' "$1" "$2"
+}

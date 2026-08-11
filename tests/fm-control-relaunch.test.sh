@@ -164,7 +164,7 @@ run_control() {  # <case-dir> <args...>
   local dir=$1; shift
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
     FM_SPAWN_NO_GUARD=1 GROK_HOME="$dir/grokhome" \
-    FM_CONTROL_POLL=0.01 FM_CONTROL_EXIT_WAIT=0.05 FM_CONTROL_LAUNCH_WAIT=0.05 \
+    FM_CONTROL_POLL=0.02 FM_CONTROL_EXIT_WAIT=2 FM_CONTROL_LAUNCH_WAIT=2 \
     FM_REAL_GIT="${FM_REAL_GIT:-}" FM_FAKE_GIT_FAILURE="${FM_FAKE_GIT_FAILURE:-}" \
     FM_REAL_MV="${FM_REAL_MV:-}" FM_FAKE_COMPLETE_JOURNAL_MV_FAIL="${FM_FAKE_COMPLETE_JOURNAL_MV_FAIL:-}" \
     FM_FAKE_META_PUBLISH_MV_FAIL="${FM_FAKE_META_PUBLISH_MV_FAIL:-}" \
@@ -314,7 +314,10 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
     FM_FAKE_TRACE_EXPORTED="$exported" \
     run_control "$dir" rl28 relaunch --note "continue after publication" > "$dir/control.out" &
   control_pid=$!
-  while [ ! -e "$prepare" ] && [ "$i" -lt 200 ]; do
+  # 200 * 0.01s = 2s was tuned for near-instant Linux subprocess spawns; this
+  # machine's real git-bash/MSYS subprocess overhead regularly exceeds that
+  # (confirmed elsewhere in this suite), so this needs real headroom.
+  while [ ! -e "$prepare" ] && [ "$i" -lt 1500 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
@@ -332,7 +335,7 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
       --carry-platform x --carry-max 280 > "$dir/link.out" 2>&1 &
   link_pid=$!
   i=0
-  while { [ ! -e "$ready" ] || [ ! -e "$exported" ]; } && [ "$i" -lt 200 ]; do
+  while { [ ! -e "$ready" ] || [ ! -e "$exported" ]; } && [ "$i" -lt 1500 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done

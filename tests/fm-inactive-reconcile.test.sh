@@ -171,6 +171,10 @@ test_local_secondmate_rejects_relative_parent_home() {
 test_invalid_secondmate_marker_blocks_routing() {
   local kind out target
   for kind in malformed symlink; do
+    if [ "$kind" = symlink ] && ! fm_test_platform_symlinks_supported; then
+      fm_test_platform_skip "symlink secondmate marker case" "this account cannot create real file symlinks"
+      continue
+    fi
     make_world "invalid-marker-$kind"
     write_child "$MATE" child 'failed: terminal'
     if [ "$kind" = malformed ]; then

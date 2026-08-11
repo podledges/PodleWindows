@@ -206,7 +206,11 @@ test_lock_single_winner_under_concurrency() {
         printf "%s\n" "$$" >> "$3"
         # Stay alive so the held lock names a live pid for the whole window;
         # otherwise a late contender could legitimately reclaim a dead-pid lock.
-        sleep 1
+        # 40-way contention (steal-mutex serialization included) can take several
+        # real seconds to resolve on platforms with high subprocess-spawn
+        # overhead (observed up to ~6s on Windows/MSYS), so this must outlast
+        # the slowest straggling checks, not just the fast common case.
+        sleep 10
       fi
     ' _ "$LIB" "$lockdir" "$marker" &
     pids="$pids $!"
@@ -404,7 +408,7 @@ test_lock_late_claim_loses_after_recreate() {
   out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$state" bash -c '
     . "$1"
     owner1=$(fm_lock_owner_dir "$2") || exit 20
-    ln -s "$owner1" "$2" || exit 21
+    fm_lock_symlink "$owner1" "$2" || exit 21
     touch -h -t 200001010000 "$2" 2>/dev/null || sleep 2
     if ! fm_lock_try_acquire "$2"; then exit 22; fi
     before=$(cat "$2/pid" 2>/dev/null || true)
@@ -436,7 +440,7 @@ test_lock_paused_mid_acquire_claim_fails_during_steal() {
   out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$state" bash -c '
     . "$1"
     owner=$(fm_lock_owner_dir "$2") || exit 20
-    ln -s "$owner" "$2" || exit 21
+    fm_lock_symlink "$owner" "$2" || exit 21
     fm_lock_try_acquire "$2.steal" || exit 22
     steal_owner=${FM_LOCK_OWNER_DIR:-}
     if fm_lock_claim "$2" "$owner"; then late=won; else late=lost; fi
@@ -516,10 +520,13 @@ test_watch_restart_attaches_to_healthy_peer() {
   printf '%s\n' "$WATCH" > "$state/.watch.lock/watcher-path"
   printf '%s\n' "$identity" > "$state/.watch.lock/pid-identity"
   touch "$state/.last-watcher-beat"
-  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_ARM_ATTACH_POLL=0.1 FM_ARM_CONFIRM_TIMEOUT=1 "$WATCH_ARM" --restart > "$out" &
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_ARM_ATTACH_POLL=0.1 FM_ARM_CONFIRM_TIMEOUT=10 "$WATCH_ARM" --restart > "$out" &
   armpid=$!
   i=0
-  while [ "$i" -lt 80 ]; do
+  # A 1s confirm timeout raced the confirmation deadline under real subprocess-
+  # spawn overhead (see the identical note below at the successor-handshake
+  # fixture); widen both the timeout and this poll window to match.
+  while [ "$i" -lt 200 ]; do
     grep -qF "watcher: attached pid=$peer" "$out" 2>/dev/null && break
     sleep 0.1
     i=$((i + 1))
