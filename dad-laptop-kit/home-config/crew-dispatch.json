@@ -6,6 +6,11 @@
       "why": "Prompt-specified Grok override. Requires the Grok Build CLI installed and authenticated. Model omitted so grok uses its account default."
     },
     {
+      "when": "The captain or task text explicitly requests Codex, harness=codex, or wording like 'send this to codex' / 'run on codex'.",
+      "use": { "harness": "codex", "model": "gpt-5.5", "effort": "high" },
+      "why": "Prompt-specified Codex override. Requires the Codex CLI installed and authenticated."
+    },
+    {
       "when": "The captain or task text explicitly requests Claude, Claude Code, harness=claude, or wording like 'send this to claude' / 'run on claude' (and does not name Fable/Haiku).",
       "use": { "harness": "claude", "model": "fable", "effort": "high" },
       "why": "Prompt-specified Claude override defaults to Fable."
@@ -29,9 +34,10 @@
       "when": "The task is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.",
       "use": [
         { "harness": "claude", "model": "fable", "effort": "high" },
-        { "harness": "pi", "model": "grok-4", "effort": "high" }
+        { "harness": "pi", "model": "grok-4", "effort": "high" },
+        { "harness": "codex", "model": "gpt-5.5", "effort": "high" }
       ],
-      "why": "Strong profile for big ambiguous work; the array lets quota-array-dispatch fall through to Pi-on-Grok when Claude quota is low."
+      "why": "Strong profile for big ambiguous work; the array lets quota-array-dispatch fall through by live quota headroom across Claude, Pi-on-Grok, and Codex."
     }
   ],
   "default": { "harness": "pi", "model": "grok-4", "effort": "medium" }

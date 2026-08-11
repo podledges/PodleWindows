@@ -57,6 +57,22 @@ It writes: skills → `~\.claude\skills`, ADHD hook → `~\.claude\hooks`, fleet
 
 **Note:** this kit's `crew-dispatch.json` (default = pi-on-grok crew) intentionally replaces the `setup/` kit's claude-primary example. If step 3 already wrote one, rerun with `-Force` or copy `dad-laptop-kit\home-config\crew-dispatch.json` over `config\crew-dispatch.json` by hand.
 
+#### What this crew-dispatch.json actually does
+
+Every task lands somewhere below — dispatch always happens, only the harness choice narrows. `default` is the catch-all when nothing else matches, not "no dispatch."
+
+| Task type | Where it dispatches |
+|---|---|
+| Explicit ask: "use grok" / "send this to grok" | Grok (native harness), always |
+| Explicit ask: "use codex" / "send this to codex" | Codex/gpt-5.5, always |
+| Explicit ask: "use claude" / "use pi" | That harness, always |
+| High-complexity design or architecture | Claude/Fable |
+| Trivial mechanical edit (rename, typo, formatting) | Claude/Haiku |
+| Big/ambiguous multi-file feature, risky refactor | Claude/Fable, Pi-on-Grok, or Codex — `quota-array-dispatch` picks whichever has live quota headroom, so usage balances across the three over time instead of favoring one |
+| Everything else (no rule matched) | `default`: Pi-on-Grok, medium |
+
+Native Grok only fires on explicit request in this kit — the big/ambiguous row reaches Grok indirectly through Pi (`bin/pi-grok`, step 5.4 above), not the raw `grok` harness. Add a `{ "harness": "grok", "effort": "high" }` entry to that array yourself if you want native Grok competing there too.
+
 ### 5. Install + authenticate the individual tools
 
 1. **Claude Code**: `npm install -g @anthropic-ai/claude-code`, then `claude` → log in with the subscription account.
