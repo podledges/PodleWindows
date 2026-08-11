@@ -695,18 +695,57 @@ fm_remote_job_process_start() {
   printf '%s\n' "$value"
 }
 
+# MSYS/Cygwin's minimal ps accepts -p but refuses the GNU/BSD custom-output -o
+# flag outright ("unknown option -- o"), so a binary's mere existence at
+# /bin/ps or /usr/bin/ps does not prove it can serve the -o queries below. Probe
+# it against this shell's own pid once and cache nothing: callers that need the
+# verified binary path call this directly.
+fm_remote_job_native_ps_bin() {
+  local ps_bin
+  if [ -x /bin/ps ]; then ps_bin=/bin/ps; elif [ -x /usr/bin/ps ]; then ps_bin=/usr/bin/ps; else return 1; fi
+  "$ps_bin" -o pid= -p "$$" >/dev/null 2>&1 || return 1
+  printf '%s\n' "$ps_bin"
+}
+
+# Windows fallback for a single process's command line, used only when this
+# platform's ps cannot serve -o (see fm_remote_job_native_ps_bin above). Reads
+# the real Windows process table via CIM rather than the MSYS/Cygwin pid
+# emulation, so it also reaches a pid outside that emulation's own pid database.
+fm_remote_job_windows_process_command() { # <pid>
+  local pid=$1 value
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  command -v powershell.exe >/dev/null 2>&1 || return 1
+  value=$(powershell.exe -NoProfile -NonInteractive -Command "
+    \$p = Get-CimInstance Win32_Process -Filter \"ProcessId=$pid\" -ErrorAction SilentlyContinue
+    if (\$p) { (\$p.CommandLine -replace '\`r',' ' -replace '\`n',' ') }
+  " 2>/dev/null)
+  [ -n "$value" ] || return 1
+  printf '%s\n' "$value"
+}
+
 fm_remote_job_process_command() {
   local pid=$1 ps_bin value
-  if [ -x /bin/ps ]; then ps_bin=/bin/ps; elif [ -x /usr/bin/ps ]; then ps_bin=/usr/bin/ps; else return 1; fi
-  value=$("$ps_bin" -p "$pid" -o command= 2>/dev/null) || return 1
-  [ -n "$value" ] || return 1
+  if ps_bin=$(fm_remote_job_native_ps_bin); then
+    value=$("$ps_bin" -p "$pid" -o command= 2>/dev/null)
+    if [ -n "$value" ]; then
+      case "$value" in *$'\n'*|*$'\r'*) return 1 ;; esac
+      printf '%s\n' "$value"
+      return 0
+    fi
+    return 1
+  fi
+  value=$(fm_remote_job_windows_process_command "$pid") || return 1
   case "$value" in *$'\n'*|*$'\r'*) return 1 ;; esac
   printf '%s\n' "$value"
 }
 
+# No Windows fallback: native Windows processes carry no POSIX process-group
+# id, so a caller that cannot resolve one here correctly falls back to
+# signalling the lone pid (fm_remote_job_worker_process_group,
+# fm_remote_job_stop_worker_tree) rather than a fabricated group.
 fm_remote_job_process_pgid() { # <pid>
   local pid=$1 ps_bin value
-  if [ -x /bin/ps ]; then ps_bin=/bin/ps; elif [ -x /usr/bin/ps ]; then ps_bin=/usr/bin/ps; else return 1; fi
+  ps_bin=$(fm_remote_job_native_ps_bin) || return 1
   value=$("$ps_bin" -p "$pid" -o pgid= 2>/dev/null) || return 1
   value=$(printf '%s' "$value" | tr -d '[:space:]')
   case "$value" in ''|*[!0-9]*) return 1 ;; esac
@@ -740,10 +779,23 @@ fm_remote_job_worker_process_group() { # <pid>
   printf '%s\n' "$pgid"
 }
 
+# Windows has no POSIX process group, so a leaked native child (e.g. a git
+# subprocess the worker spawned) would otherwise survive a lone `kill -KILL
+# $pid`. taskkill's /T recurses the real Windows parent-child tree, which is
+# the platform's own equivalent of signalling a whole process group.
+fm_remote_job_windows_kill_tree() { # <pid>
+  local pid=$1
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  command -v taskkill.exe >/dev/null 2>&1 || return 1
+  taskkill.exe /PID "$pid" /T /F >/dev/null 2>&1
+}
+
 # Stop a worker and every descendant it leaked, TERM first and KILL only for a
 # survivor. Signals the isolated worker group when one is provable and the lone
-# process otherwise. Returns non-zero when any verified worker-group member is
-# still alive afterwards.
+# process otherwise; on the lone-process path a still-living pid also gets a
+# taskkill /T pass, so a leaked native Windows child does not survive when no
+# POSIX group was resolvable. Returns non-zero when any verified worker-group
+# member is still alive afterwards.
 fm_remote_job_stop_worker_tree() { # <pid>
   local pid=$1 pgid i=0
   case "$pid" in ''|*[!0-9]*) return 1 ;; esac
@@ -760,7 +812,12 @@ fm_remote_job_stop_worker_tree() { # <pid>
   else
     kill -0 "$pid" 2>/dev/null || return 0
   fi
-  if [ -n "$pgid" ]; then kill -KILL -- "-$pgid" 2>/dev/null || true; else kill -KILL "$pid" 2>/dev/null || true; fi
+  if [ -n "$pgid" ]; then
+    kill -KILL -- "-$pgid" 2>/dev/null || true
+  else
+    kill -KILL "$pid" 2>/dev/null || true
+    fm_remote_job_windows_kill_tree "$pid" || true
+  fi
   i=0
   while { [ -n "$pgid" ] && kill -0 -- "-$pgid" 2>/dev/null || [ -z "$pgid" ] && kill -0 "$pid" 2>/dev/null; } \
     && [ "$i" -lt 50 ]; do

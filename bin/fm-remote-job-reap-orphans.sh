@@ -77,23 +77,66 @@ reap_worker_root() { # <command>
   printf '%s\n' "$prefix"
 }
 
+# Windows fallback for the parent-pid walk: the real Windows process table via
+# CIM, since MSYS/Cygwin's minimal ps cannot serve -o ppid= (see
+# fm_remote_job_native_ps_bin's header in fm-remote-job-lib.sh). This safety
+# check must fail closed, not silently no-op, when ancestry cannot be read at
+# all - reap_is_self_or_ancestor's caller already treats an unresolved walk as
+# "not an ancestor", so a missing Windows fallback here would have quietly
+# disabled the never-signal-an-ancestor guarantee on this platform instead of
+# just failing one lookup.
+reap_windows_ppid() { # <pid>
+  local pid=$1
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  command -v powershell.exe >/dev/null 2>&1 || return 1
+  powershell.exe -NoProfile -NonInteractive -Command "
+    (Get-CimInstance Win32_Process -Filter \"ProcessId=$pid\" -ErrorAction SilentlyContinue).ParentProcessId
+  " 2>/dev/null | tr -d '[:space:]'
+}
+
 reap_is_self_or_ancestor() { # <pid>
-  local pid=$1 walk=$$ i=0
+  local pid=$1 walk=$$ i=0 ps_bin
+  ps_bin=$(fm_remote_job_native_ps_bin 2>/dev/null || true)
   while [ "$walk" -gt 1 ] && [ "$i" -lt 64 ]; do
     [ "$walk" != "$pid" ] || return 0
-    walk=$(ps -p "$walk" -o ppid= 2>/dev/null | tr -d '[:space:]') || return 0
+    if [ -n "$ps_bin" ]; then
+      walk=$("$ps_bin" -p "$walk" -o ppid= 2>/dev/null | tr -d '[:space:]') || return 0
+    else
+      walk=$(reap_windows_ppid "$walk") || return 0
+    fi
     case "$walk" in ''|*[!0-9]*) return 1 ;; esac
     i=$((i + 1))
   done
   return 1
 }
 
+# Windows fallback for the account-wide process scan: the real Windows process
+# table via CIM, since MSYS/Cygwin's minimal ps cannot serve -o pid=,command=.
+# Not scoped to the current uid the way the native path is - CIM's per-process
+# owner lookup is a slow invoke-method call per row, and every candidate below
+# is already gated on an exact fm-remote-job-worker.sh command match plus its
+# code root's liveness, so an unfiltered scan cannot widen what gets reaped.
+reap_windows_process_rows() {
+  command -v powershell.exe >/dev/null 2>&1 || return 1
+  powershell.exe -NoProfile -NonInteractive -Command '
+    Get-CimInstance Win32_Process | ForEach-Object {
+      $cmd = ($_.CommandLine -replace "[\r\n]+", " ")
+      if ($cmd) { "$($_.ProcessId) $cmd" }
+    }
+  ' 2>/dev/null
+}
+
 reap_orphans() {
-  local uid scan pid command live root own_pgid pgid
+  local uid scan pid command live root own_pgid pgid ps_bin
   uid=$(id -u 2>/dev/null || true)
   case "$uid" in ''|*[!0-9]*) reap_die "cannot resolve the current uid" ;; esac
-  scan=$(ps -u "$uid" -o pid=,command= 2>/dev/null) ||
-    reap_die "cannot scan this account's processes for remote job workers"
+  if ps_bin=$(fm_remote_job_native_ps_bin 2>/dev/null); then
+    scan=$("$ps_bin" -u "$uid" -o pid=,command= 2>/dev/null) ||
+      reap_die "cannot scan this account's processes for remote job workers"
+  else
+    scan=$(reap_windows_process_rows) ||
+      reap_die "cannot scan this account's processes for remote job workers"
+  fi
   own_pgid=$(fm_remote_job_process_pgid "$$" 2>/dev/null || true)
   # ps pads the pid column to the widest pid on the host, so the fields are read
   # with default word splitting rather than by fixed offsets or a single space.

@@ -321,13 +321,24 @@ fm_busy_muse_binding_field() {  # <state-dir> <id> <key>
 # lifecycle - folding a child's log would report the parent busy long after the
 # parent's turn ended.
 fm_busy_muse_matching_logs() {  # <sessions-root> <workspace-root>
-  local root=$1 ws=$2
+  local root=$1 ws=$2 wsfile
   [ -d "$root" ] || return 1
   command -v node >/dev/null 2>&1 || return 1
-  node - "$root" "$ws" <<'NODE'
+  # $ws is compared against workspace_root values recorded verbatim inside each
+  # session.jsonl - plain file bytes this shell wrote, so still in whatever
+  # form this shell uses for paths. Handing $ws to node directly as an argv
+  # would not survive that comparison intact: MSYS/Git-Bash rewrites
+  # POSIX-looking argv (and env) strings into native Windows paths for a
+  # non-MSYS child like node, so the in-process value and the file's recorded
+  # value would end up in two different, non-matching representations of the
+  # same path. Routing it through a file node reads itself keeps it byte-exact.
+  wsfile=$(mktemp) || return 1
+  printf '%s' "$ws" > "$wsfile" || { rm -f "$wsfile"; return 1; }
+  node - "$root" "$wsfile" <<'NODE'
 const fs = require("fs");
 const path = require("path");
-const [root, workspace] = process.argv.slice(2);
+const [root, wsfile] = process.argv.slice(2);
+const workspace = fs.readFileSync(wsfile, "utf8");
 
 function directories(parent) {
   try {
@@ -372,6 +383,9 @@ for (const year of directories(root)) {
   }
 }
 NODE
+  local rc=$?
+  rm -f "$wsfile"
+  return "$rc"
 }
 
 fm_busy_muse_binding_has_prior_log() {  # <state-dir> <id> <session-log>
