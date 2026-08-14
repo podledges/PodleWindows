@@ -59,6 +59,17 @@ if [ "${1:-}" = "status" ]; then
 fi
 
 me=$(fm_harness_ancestry_pid) || { echo "error: cannot locate harness process in ancestry" >&2; exit 1; }
+# Fleet control is foreground-only for Claude: a daemon-hosted (detached)
+# background job may do ordinary repo work read-only, but it must never become
+# the controlling firstmate session - its inherited pane identity cannot prove
+# a live launcher, and the daemon keeps it "live" long after its work is done,
+# which is exactly the stuck-lock shape of data/handover-2026-08-12. The Stop
+# auto-arm tolerates this refusal (`|| exit 0`), so a detached session
+# degrades gracefully instead of claiming the home.
+if [ "${FM_ALLOW_DETACHED_FLEET_CONTROL:-0}" != 1 ] && fm_session_is_detached_claude_bg; then
+  echo "error: this session is a detached Claude background job (daemon-hosted harness ancestry); fleet control is foreground-only - return fleet work to the foreground Claude pane and operate read-only here (FM_ALLOW_DETACHED_FLEET_CONTROL=1 overrides for deliberate unattended supervision)" >&2
+  exit 1
+fi
 probe=$(mktemp "$STATE/.lock-write.XXXXXX" 2>/dev/null) || {
   echo "error: cannot write session lock; operate read-only until resolved" >&2
   exit 1

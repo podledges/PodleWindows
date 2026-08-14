@@ -257,8 +257,12 @@ esac
 SH
   chmod +x "$fakebin/ps"
 
+  # The pty host (800) is daemon infrastructure under the transient daemon: it
+  # outlives its session for as long as the job stays open, so the lock write
+  # pid is the outermost NON-shared-host process 700, whose lifetime is the
+  # session's own.
   got=$(lib_eval "$fakebin" 'fm_harness_ancestry_pid') || fail "the daemon-hosted session was not resolved at all"
-  [ "$got" = 800 ] || fail "the lock write pid must be the outermost per-session process 800, got '$got'"
+  [ "$got" = 700 ] || fail "the lock write pid must be the outermost non-shared-host process 700, got '$got'"
   # A legacy lock naming the shared daemon still belongs to the session it
   # hosts, so a mid-flight library upgrade never orphans a live session.
   printf '600\n' > "$dir/state/.lock"
@@ -285,9 +289,15 @@ test_shared_host_detection_reads_only_argv0_adjacent_tokens() {
   lib_eval "$FAKEBIN" \
     'fm_harness_args_is_shared_host "\"C:/Program Files/claude/claude.exe\" daemon run --origin transient"' \
     || fail "a quoted argv0 daemon-run argument string was not detected"
+  # The transient daemon hosts each worker as its own --bg-pty-host process:
+  # that argv shape IS the shared-host case, anchored to its own token slot -
+  # never to the prompt text embedded later in the same argument string.
+  lib_eval "$FAKEBIN" \
+    'fm_harness_args_is_shared_host "claude --bg-pty-host pipe 49 37 -- claude"' \
+    || fail "a pty-host argument string was not detected as the daemon-hosted shape"
   if lib_eval "$FAKEBIN" \
-    'fm_harness_args_is_shared_host "claude --bg-pty-host pipe -- claude daemon run in a prompt"'; then
-    fail "prompt text embedded in a pty-host argument string was mistaken for the daemon"
+    'fm_harness_args_is_shared_host "claude --resume -- fix the daemon run and --bg-pty-host docs"'; then
+    fail "prompt text embedded in an ordinary argument string was mistaken for the daemon"
   fi
   if lib_eval "$FAKEBIN" 'fm_harness_args_is_shared_host "claude --resume"'; then
     fail "an ordinary session argument string was mistaken for the daemon"
@@ -518,8 +528,10 @@ test_e2e_daemon_parented_version_named_session_keeps_its_lock() {
 }
 
 # The real background-job daemon carries argv "claude daemon run ...", unlike
-# the plain script-parented daemons above. A session under it that runs the
-# REAL fm-lock.sh must record its own pid, never the shared daemon's.
+# the plain script-parented daemons above. A daemon-hosted session is refused
+# fleet control outright (foreground-only); under the deliberate
+# FM_ALLOW_DETACHED_FLEET_CONTROL override the write semantics still hold:
+# the lock records the session's own pid, never the shared daemon's.
 test_e2e_real_daemon_argv_records_the_session_not_the_daemon() {
   local dir i session_pid daemon_pid lock_after
   dir="$TMP_ROOT/e2e-daemon-argv"
@@ -541,7 +553,11 @@ SH
 #!/usr/bin/env bash
 printf '%s\n' "$$" > "$FM_HOME/state/session-pid"
 rm -f "$FM_HOME/state/.lock"
-"$FM_HOME/bin/fm-lock.sh" > "$FM_HOME/state/hook.out" 2>&1
+# Without the override this daemon-hosted acquire must refuse foreground-only.
+"$FM_HOME/bin/fm-lock.sh" > "$FM_HOME/state/refused.out" 2>&1
+printf '%s\n' "$?" > "$FM_HOME/state/refused.rc"
+FM_ALLOW_DETACHED_FLEET_CONTROL=1 \
+  "$FM_HOME/bin/fm-lock.sh" > "$FM_HOME/state/hook.out" 2>&1
 printf '%s\n' "$?" > "$FM_HOME/state/hook.rc"
 SH
   chmod +x "$dir/daemon" "$dir/session-lock.sh"
@@ -558,7 +574,11 @@ SH
   session_pid=$(tr -d '[:space:]' < "$dir/state/session-pid")
   daemon_pid=$(tr -d '[:space:]' < "$dir/state/daemon-pid")
   lock_after=$(tr -d '[:space:]' < "$dir/state/.lock")
-  expect_code 0 "$(hook_rc "$dir")" "fm-lock.sh must acquire inside a daemon-hosted session"
+  expect_code 1 "$(tr -d '[:space:]' < "$dir/state/refused.rc")" \
+    "a daemon-hosted acquire without the override must refuse fleet control"
+  assert_contains "$(cat "$dir/state/refused.out")" "fleet control is foreground-only" \
+    "the daemon-hosted refusal did not name the foreground-only rule"
+  expect_code 0 "$(hook_rc "$dir")" "fm-lock.sh must acquire inside a daemon-hosted session under the deliberate override"
   [ -n "$daemon_pid" ] && [ "$session_pid" != "$daemon_pid" ] \
     || fail "fixture did not produce a distinct daemon and session: session=$session_pid daemon=$daemon_pid"
   [ "$lock_after" != "$daemon_pid" ] \

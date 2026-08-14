@@ -239,6 +239,8 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-trace-context-lib.sh"
 # shellcheck source=bin/fm-remote-readiness-lib.sh
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
+# shellcheck source=bin/fm-session-lock-lib.sh
+. "$SCRIPT_DIR/fm-session-lock-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -947,6 +949,7 @@ if [ "$RELAUNCH" -eq 0 ]; then
   if [ "$BACKEND" = orca ]; then
     fm_backend_orca_runtime_check || exit 1
   fi
+  fm_session_refuse_detached_herdr_spawn "$BACKEND" || exit 1
 fi
 SPAWN_TASK_LOCK="$STATE/.spawn-$ID.lock"
 if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
@@ -979,6 +982,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RELAUNCH_TARGET=$FM_BACKEND_VALIDATED_TARGET
   fm_backend_validate_spawn "$BACKEND" || exit 1
   fm_backend_source "$BACKEND" || exit 1
+  fm_session_refuse_detached_herdr_spawn "$BACKEND" || exit 1
   # A relaunch must PROVE the previous agent is gone before it launches another
   # one into the same endpoint, and only tmux and herdr have a recovery-grade
   # classifier that can (bin/fm-control-lib.sh owns that capability table).

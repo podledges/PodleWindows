@@ -213,6 +213,31 @@ If no-mistakes spawns agents via npm cmd-shims and mangles `--json-schema`, poin
 | No worker UI | §6 `config/backend` + `herdr` + restart |
 | `use grok` fails | §8 `grok` on PATH + auth |
 | Double steers | §9 pane read before resend |
+| Claude says "fleet control is foreground-only" | §12 — by design, not a failure |
+
+---
+
+## 12. Claude background jobs: fleet control is foreground-only
+
+A Claude session hosted by the background daemon (`claude agents` jobs, `--bg`
+runs — anything whose ancestry contains a `--bg-pty-host` or `daemon run`
+process) is refused the fleet lock and herdr spawns **by design**. Its
+inherited `HERDR_PANE_ID` is a launch-time snapshot that cannot prove a live
+launcher pane, and the daemon keeps the job "live" long after its work is
+done, which is how stuck locks happened before.
+
+**Not fixed by** restarting, re-trusting the project, killing the holder pid
+(the daemon respawns it in seconds), or deleting `state/.lock`.
+
+**Fix:** run fleet work (spawn / steer / merge / lock ownership) from an
+ordinary foreground `claude` in a live herdr pane. Background jobs still do
+normal repo work read-only. `FM_ALLOW_DETACHED_FLEET_CONTROL=1` is the
+deliberate unattended-supervision override; do not set it to dodge the
+refusal.
+
+Do **not** launch the fleet-controlling session via `claude agents` — its
+prompts run in hidden daemon sessions even when its dashboard is the only
+visible pane. Use plain `claude` in the pane instead.
 
 ---
 

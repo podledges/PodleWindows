@@ -1592,7 +1592,18 @@ fm_backend_herdr_launcher_identity() {  # <session>
   fi
 
   pane_out=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null) || {
-    echo "error: herdr launcher pane '$pane' could not be read in session '$session'; refusing to place a worker without its exact parent workspace" >&2
+    # Say WHY the pane is unreadable when that can be told apart: a detached
+    # Claude background job inherited a pane snapshot it can no longer prove
+    # (return the request to the foreground pane), versus a genuinely closed
+    # or stale launcher pane (restart the request from a live pane). The
+    # classifier lives in fm-session-lock-lib.sh, which not every caller
+    # sources; without it the generic refusal stands unchanged.
+    if type fm_session_is_detached_claude_bg >/dev/null 2>&1 \
+      && fm_session_is_detached_claude_bg; then
+      echo "error: herdr launcher pane '$pane' could not be read in session '$session', and this process runs inside a detached Claude background job whose pane identity is a stale snapshot; herdr placement is foreground-only - re-issue this request from the foreground Claude pane" >&2
+    else
+      echo "error: herdr launcher pane '$pane' could not be read in session '$session'; refusing to place a worker without its exact parent workspace - if that pane was closed, restart this request from a live herdr pane" >&2
+    fi
     return 1
   }
   tab=$(printf '%s' "$pane_out" | jq -r --arg pane "$pane" '

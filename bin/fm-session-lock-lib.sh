@@ -241,6 +241,43 @@ fm_harness_ancestry_rows() {
   [ "$printed" -eq 1 ]
 }
 
+# True when the current process runs inside a DETACHED Claude background job:
+# its contiguous harness ancestry contains a daemon shared-host row (the
+# `daemon run` host or a `--bg-pty-host` worker chain). Such a session was
+# launched through the background daemon, not from the pane the captain is
+# looking at, so any pane identity it inherited (e.g. HERDR_PANE_ID) is a
+# snapshot that can no longer prove a live parent. A foreground pane session
+# has session rows only and is never detached. The classification is
+# structural - executable argv shapes via fm_harness_args_is_shared_host -
+# never prompt text. An unresolvable ancestry returns 1 (not detached): the
+# callers below use this to REFUSE extra authority, and the plain
+# cannot-locate-harness refusals already cover the unreadable case.
+fm_session_is_detached_claude_bg() {
+  local rows pid kind
+  rows=$(fm_harness_ancestry_rows) || return 1
+  while IFS=$'\t' read -r pid kind; do
+    [ "$kind" = shared-host ] && return 0
+  done <<EOF
+$rows
+EOF
+  return 1
+}
+
+# Shared spawn preflight: refuse herdr placement from a detached Claude
+# background job BEFORE any worktree, container, or task record exists. Herdr
+# placement needs a live launcher pane, which a daemon-hosted job structurally
+# cannot prove (its HERDR_PANE_ID snapshot predates detachment), so failing
+# here with the real reason beats failing later with a stale-pane read error.
+# FM_ALLOW_DETACHED_FLEET_CONTROL=1 is the deliberate unattended-supervision
+# override (e.g. away-mode automation on a non-pane backend path).
+fm_session_refuse_detached_herdr_spawn() {  # <backend>
+  [ "${1:-}" = herdr ] || return 0
+  [ "${FM_ALLOW_DETACHED_FLEET_CONTROL:-0}" = 1 ] && return 0
+  fm_session_is_detached_claude_bg || return 0
+  echo "error: this spawn is running inside a detached Claude background job (daemon-hosted harness ancestry); herdr placement is foreground-only - re-issue this request from the foreground Claude pane" >&2
+  return 1
+}
+
 # Pids-only view of the same walk, innermost first, for callers that need the
 # contiguous run's membership rather than one chosen identity.
 fm_harness_ancestry_pids() {
