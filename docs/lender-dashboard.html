@@ -192,6 +192,15 @@
 
   footer { margin-top: 44px; color: var(--ink-3); font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
   footer a { color: var(--accent); }
+
+  #to-top {
+    position: fixed; right: 18px; bottom: 18px; z-index: 50;
+    background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 999px;
+    font: 700 13px var(--sans); padding: 10px 16px; cursor: pointer; box-shadow: var(--shadow);
+    opacity: 0; pointer-events: none; transition: opacity .15s;
+  }
+  #to-top.show { opacity: 1; pointer-events: auto; }
+  .brand { cursor: pointer; }
 </style>
 
 <header>
@@ -240,6 +249,8 @@
     <div class="sec-head"><h2>Market map</h2><p>the visible graph V — origins &rarr; financed borrowers &rarr; offtakers, sized by volume; click a node to trace its flows</p></div>
     <div class="card chart-card">
       <div class="chart-wrap"><svg id="ch-net" aria-label="Market network map"></svg></div>
+      <p class="sub" style="margin:8px 0 0">Dashed arcs left of the borrower column are trader-to-trader flows.
+      When both ends are financed the same trade appears in two certificates — seller receivable vs buyer payable — and the console flags any pair that fails to mirror.</p>
       <div class="map-legend" id="net-legend"></div>
     </div>
   </section>
@@ -307,6 +318,7 @@
   </footer>
 </main>
 
+<button id="to-top" aria-label="Back to top">&#8593; Top</button>
 <div id="tooltip" role="tooltip"></div>
 
 <script>
@@ -415,6 +427,24 @@ function makeWorld(cKey){
     b.margin=routeNow+gauss(r)*6+(b.marginBase-55)*0.35;
   });
 
+  /* inter-borrower trades: traders trade among each other (T->T edges).
+     Both ends financed => the edge is observed twice and must mirror. */
+  const priceMkt=(cKey==="coffee")?3.5:2.6; // $M per kt, rough
+  const byThr=[...borrowers].sort((a,b)=>b.thr-a.thr).map(b=>b.id);
+  const top20=byThr.slice(0,20), inter=[];
+  for(let i=0;i<9;i++){
+    const f=top20[Math.floor(r()*20)];
+    let t=top20[Math.floor(r()*20)];
+    if(t===f) t=top20[(top20.indexOf(f)+7)%20];
+    if(inter.some(e=>(e.from===f&&e.to===t)||(e.from===t&&e.to===f))) continue;
+    inter.push({from:f,to:t,vol:borrowers[f].thr*(0.04+r()*0.1),mismatch:false});
+  }
+  for(let i=0;i<6;i++){
+    const f=Math.floor(r()*NB), t=Math.floor(r()*NB);
+    if(f!==t) inter.push({from:f,to:t,vol:borrowers[f].thr*(0.03+r()*0.08),mismatch:false});
+  }
+  inter[0].mismatch=true; inter[0].gap=0.14+r()*0.15;
+
   /* double-pledge: one cooperative appears in 3 borrowers' collateral */
   const dpBorrowers=[7,31,64].map(i=>borrowers[i]);
   const dp={ name:`${pick(r,["Kavu","Sundo","Ambe","Rio Claro","Nyame"])} Cooperative`,
@@ -434,7 +464,7 @@ function makeWorld(cKey){
   const multiShare=100*(D-f1)/D;
 
   const financed=borrowers.reduce((s,b)=>s+b.thr,0);
-  return { C, months, off, borrowers, invSeries, marSeries, routes, dp,
+  return { C, months, off, borrowers, invSeries, marSeries, routes, dp, inter, priceMkt,
     cov:{names:covNames, vol:covVol, D, chao, multiShare, NO},
     kpi:{ financed, pi:100*financed/C.Q,
       volCov: covVol[NB-1], recvTotal: borrowers.reduce((s,b)=>s+b.recv,0) } };
@@ -546,6 +576,15 @@ function collectAlerts(){
       d:`>60-day share ${o.over60.toFixed(1)}% (${o.trend>=0?"+":""}${o.trend.toFixed(1)} pts vs 12m ago) across ${o.borrowers.size} borrowers' ledgers.`,
       act:"Open bureau file", target:o.id });
   });
+  const mm=world.inter.find(e=>e.mismatch);
+  if(mm){
+    const A=world.borrowers[mm.from], Bb=world.borrowers[mm.to];
+    const aM=mm.vol*world.priceMkt*0.22, bM=aM*(1-mm.gap);
+    const chains=world.inter.length, chainVol=world.inter.reduce((s,e)=>s+e.vol,0);
+    a.push({ sev:"serious", t:`Mirror-check discrepancy — ${A.name.split(" (")[0]} ↔ ${Bb.name.split(" (")[0]}`,
+      d:`Both sides of this trade are financed, so their reports must reconcile: ${A.name.split(" (")[0]} certifies a $${aM.toFixed(1)}M receivable from ${Bb.name.split(" (")[0]}, whose payables show $${bM.toFixed(1)}M (${(100*mm.gap).toFixed(0)}% gap). Portfolio carries ${chains} borrower-to-borrower trade links (~${fmt(chainVol)} kt) — correlated exposure inside the book.`,
+      act:"Reconcile certificates", target:null });
+  }
   const inv=world.invSeries, avgNow=inv.reduce((s,x)=>s+x.values[M-1],0)/inv.length,
         avgPrev=inv.reduce((s,x)=>s+x.values[M-5],0)/inv.length;
   if(avgNow-avgPrev>6) a.push({ sev:"warn", t:"Synchronized inventory build",
@@ -689,6 +728,22 @@ function renderNetwork(){
         opacity:on?0.45:0.05},gEdges);
     });
   });
+  /* trader-to-trader edges among displayed borrowers: both ends financed = doubly observed */
+  world.inter.forEach(e=>{
+    if(borY[e.from]===undefined||borY[e.to]===undefined) return;
+    const y1=borY[e.from], y2=borY[e.to], bulge=Math.min(150,40+Math.abs(y2-y1)*0.35);
+    const on=!selNetNode||(selNetNode.kind==="bor"&&(selNetNode.id===e.from||selNetNode.id===e.to));
+    const p=el("path",{d:`M ${colX.bor-11} ${y1} C ${colX.bor-bulge} ${(y1+y2)/2}, ${colX.bor-bulge} ${(y1+y2)/2}, ${colX.bor-11} ${y2}`,
+      fill:"none", stroke:e.mismatch?"var(--crit)":"var(--s6)",
+      "stroke-width":Math.max(1.4,Math.sqrt(e.vol)),"stroke-dasharray":"5 4",
+      opacity:on?0.8:0.08, style:"cursor:pointer"},gEdges);
+    const A=world.borrowers[e.from], Bb=world.borrowers[e.to];
+    p.addEventListener("pointermove",ev=>showTip(
+      `<b>${A.name.split(" (")[0]} → ${Bb.name.split(" (")[0]}</b><br>trader-to-trader: ${fmt(e.vol,1)} kt/yr<br>`+
+      (e.mismatch?`<b>⚠ certificates disagree by ${(100*e.gap).toFixed(0)}% — reconcile</b>`
+        :`both ends financed — reports mirror ✓`),ev.clientX,ev.clientY));
+    p.addEventListener("pointerleave",hideTip);
+  });
   const nodeTip=(html)=>ev=>showTip(html,ev.clientX,ev.clientY);
   const clickNode=(kind,id)=>()=>{ selNetNode=(selNetNode&&selNetNode.kind===kind&&selNetNode.id===id)?null:{kind,id};
     renderNetwork(); if(kind==="off"){ selectOfftaker(id); } };
@@ -735,6 +790,7 @@ function renderNetwork(){
     <span><i style="background:var(--warn)"></i>C</span>
     <span><i style="background:var(--crit)"></i>D / alert</span>
     <span><i style="background:none;border:1.5px solid var(--ink-3)"></i>ring = 2+ independent views</span>
+    <span><i style="background:none;border-top:2.5px dashed var(--s6);height:0;border-radius:0"></i>trader ↔ trader (both financed: reports must mirror)</span>
     <span><i style="background:none;border:2px solid var(--crit);border-radius:3px"></i>red frame = shared pledged collateral</span>
     ${selNetNode?`<button id="net-clear" style="margin-left:auto">Clear focus</button>`:""}`;
   const clr=document.getElementById("net-clear");
@@ -827,6 +883,20 @@ function renderAll(){
   selB.value=onRoute[0].id;
   renderBench();
 }
+/* navigation: JS scrolling (hash links are unreliable in sandboxed viewers) + back-to-top */
+function scrollTop(){ (document.scrollingElement||document.documentElement).scrollTo({top:0,behavior:"smooth"}); }
+document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",ev=>{
+  ev.preventDefault();
+  const t=document.getElementById(a.getAttribute("href").slice(1));
+  if(t) t.scrollIntoView({behavior:"smooth",block:"start"});
+}));
+document.querySelector(".brand").addEventListener("click",scrollTop);
+const toTop=document.getElementById("to-top");
+toTop.addEventListener("click",scrollTop);
+addEventListener("scroll",()=>{
+  toTop.classList.toggle("show",(document.scrollingElement||document.documentElement).scrollTop>500);
+},{passive:true});
+
 document.getElementById("sel-route").addEventListener("change",renderBench);
 document.getElementById("sel-borrower").addEventListener("change",renderBench);
 document.querySelectorAll("#commodity button").forEach(btn=>{
