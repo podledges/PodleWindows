@@ -100,6 +100,3 @@ Discover tests by listing `tests/*.test.sh`: each is a self-contained bash scrip
 Tests that need a real optional backend or an explicit opt-in (real herdr/zellij/cmux smoke tests, the live Pi regression) skip themselves and print the tool or environment gate needed to enable them, so the portable suite remains safe on machines without those tools.
 The [Herdr backend guide](docs/herdr-backend.md#destructive-lab-safety) owns the lane's isolation boundary, while [runtime backend verification](docs/verification/runtime-backends.md#herdr) owns active empirical evidence; live harness credential tests remain opt-in.
 
-## Questions
-
-Open an issue, or talk to me on [Discord](https://discord.gg/Wsy2NpnZDu).
