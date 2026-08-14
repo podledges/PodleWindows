@@ -36,7 +36,7 @@
 #   kimi-wire, kimi-hook  reserved: standalone Kimi, gated by fm_busy_kimi_verified
 # Firstmate-owned sources accepted for every converted adapter:
 #   fm-spawn         the launch-brief turn seeded at spawn
-#   fm-interrupt     a firstmate-controlled interruption of the worker
+#   fm-interrupt     the legacy Claude fm-send --key Escape idle event
 #   fm-recovery      a documented recovery reset after relaunch
 # Classifier-only sources (never written into a record):
 #   endpoint-gone, herdr-native, grok-regex, muse-session-log, missing,
@@ -321,13 +321,24 @@ fm_busy_muse_binding_field() {  # <state-dir> <id> <key>
 # lifecycle - folding a child's log would report the parent busy long after the
 # parent's turn ended.
 fm_busy_muse_matching_logs() {  # <sessions-root> <workspace-root>
-  local root=$1 ws=$2
+  local root=$1 ws=$2 wsfile
   [ -d "$root" ] || return 1
   command -v node >/dev/null 2>&1 || return 1
-  node - "$root" "$ws" <<'NODE'
+  # $ws is compared against workspace_root values recorded verbatim inside each
+  # session.jsonl - plain file bytes this shell wrote, so still in whatever
+  # form this shell uses for paths. Handing $ws to node directly as an argv
+  # would not survive that comparison intact: MSYS/Git-Bash rewrites
+  # POSIX-looking argv (and env) strings into native Windows paths for a
+  # non-MSYS child like node, so the in-process value and the file's recorded
+  # value would end up in two different, non-matching representations of the
+  # same path. Routing it through a file node reads itself keeps it byte-exact.
+  wsfile=$(mktemp) || return 1
+  printf '%s' "$ws" > "$wsfile" || { rm -f "$wsfile"; return 1; }
+  node - "$root" "$wsfile" <<'NODE'
 const fs = require("fs");
 const path = require("path");
-const [root, workspace] = process.argv.slice(2);
+const [root, wsfile] = process.argv.slice(2);
+const workspace = fs.readFileSync(wsfile, "utf8");
 
 function directories(parent) {
   try {
@@ -372,6 +383,9 @@ for (const year of directories(root)) {
   }
 }
 NODE
+  local rc=$?
+  rm -f "$wsfile"
+  return "$rc"
 }
 
 fm_busy_muse_binding_has_prior_log() {  # <state-dir> <id> <session-log>
@@ -513,18 +527,10 @@ EOF
   printf '%s' "$selected"
 }
 
-# fm_busy_muse_run_state: fold one session log to busy|settled|none.
-#   busy     at least one run started with no matching terminal
-#   settled  every started run reached a terminal
-#   none     the log holds no run lifecycle records at all
-# The match is anchored on the exact structural prefix rather than a bare
-# "kind":"terminal" search, because muse also emits nested "record":{"kind":
-# "terminal"} cleanup-effect payloads that are NOT run terminals and would
-# otherwise close a run that is still in flight.
-fm_busy_muse_run_state() {  # <session-log>
+fm_busy_muse_run_events() {  # <session-log>
   [ -f "$1" ] || return 1
   LC_ALL=C awk '
-    BEGIN { pre = "\"payload\":{\"kind\":\"run\",\"run_id\":\"" }
+    BEGIN { OFS = "\t"; pre = "\"payload\":{\"kind\":\"run\",\"run_id\":\"" }
     {
       p = index($0, pre)
       if (p == 0) next
@@ -539,15 +545,68 @@ fm_busy_muse_run_state() {  # <session-log>
       q = index(rest, "\"")
       if (q == 0) next
       ev = substr(rest, 1, q - 1)
-      if (ev == "started") { open[rid] = 1; seen = 1 }
-      else if (ev == "terminal") { open[rid] = 0 }
-    }
-    END {
-      if (!seen) { print "none"; exit }
-      for (r in open) if (open[r] == 1) { print "busy"; exit }
-      print "settled"
+      terminal = ""
+      if (ev == "terminal") {
+        marker = "\"terminal\":\""
+        p = index(rest, marker)
+        if (p != 0) {
+          value = substr(rest, p + length(marker))
+          q = index(value, "\"")
+          if (q != 0) terminal = substr(value, 1, q - 1)
+        }
+      }
+      if (ev == "started" || ev == "terminal") print rid, ev, terminal
     }
   ' "$1"
+}
+
+# fm_busy_muse_run_state: fold one session log to busy|settled|none.
+#   busy     at least one run started with no matching terminal
+#   settled  every started run reached a terminal
+#   none     the log holds no run lifecycle records at all
+# The match is anchored on the exact structural prefix rather than a bare
+# "kind":"terminal" search, because muse also emits nested "record":{"kind":
+# "terminal"} cleanup-effect payloads that are NOT run terminals and would
+# otherwise close a run that is still in flight.
+fm_busy_muse_run_state() {  # <session-log>
+  [ -f "$1" ] || return 1
+  fm_busy_muse_run_events "$1" | LC_ALL=C awk -F '\t' '
+    $2 == "started" { open[$1] = 1; seen = 1 }
+    $2 == "terminal" { open[$1] = 0 }
+    END {
+      if (!seen) { print "none"; exit }
+      for (rid in open) if (open[rid] == 1) { print "busy"; exit }
+      print "settled"
+    }
+  '
+}
+
+fm_busy_muse_active_run_id() {  # <session-log>
+  [ -f "$1" ] || return 1
+  fm_busy_muse_run_events "$1" | LC_ALL=C awk -F '\t' '
+    $2 == "started" { open[$1] = 1 }
+    $2 == "terminal" { open[$1] = 0 }
+    END {
+      for (rid in open) {
+        if (open[rid] != 1) continue
+        active = rid
+        count++
+      }
+      if (count != 1) exit 1
+      print active
+    }
+  '
+}
+
+fm_busy_muse_run_terminal() {  # <session-log> <run-id>
+  [ -f "$1" ] && [ -n "${2:-}" ] || return 1
+  fm_busy_muse_run_events "$1" | LC_ALL=C awk -F '\t' -v wanted="$2" '
+    $1 == wanted && $2 == "terminal" && $3 != "" { terminal = $3 }
+    END {
+      if (terminal == "") exit 1
+      print terminal
+    }
+  '
 }
 
 # fm_busy_grok_tail_busy: the Grok-only temporary rendered-tail fallback.
