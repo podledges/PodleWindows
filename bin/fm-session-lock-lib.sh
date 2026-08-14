@@ -106,6 +106,12 @@ fm_harness_args_is_shared_host() {  # <args>
   rest="${rest#"${rest%%[![:space:]]*}"}"
   case "$rest" in
     'daemon run'|'daemon run '*) return 0 ;;
+    # The transient (on-demand) daemon hosts each spare/fleet worker as its own
+    # 'claude --bg-pty-host <pipe> ...' child instead of a single foreground
+    # 'daemon run' process, so a lock holder with this argv shape is the same
+    # shared-host case under the newer daemon architecture, not an unrelated
+    # live session.
+    --bg-pty-host|--bg-pty-host\ *) return 0 ;;
   esac
   return 1
 }
