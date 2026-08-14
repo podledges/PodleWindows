@@ -241,26 +241,314 @@ fm_harness_ancestry_rows() {
   [ "$printed" -eq 1 ]
 }
 
-# True when the current process runs inside a DETACHED Claude background job:
-# its contiguous harness ancestry contains a daemon shared-host row (the
-# `daemon run` host or a `--bg-pty-host` worker chain). Such a session was
-# launched through the background daemon, not from the pane the captain is
-# looking at, so any pane identity it inherited (e.g. HERDR_PANE_ID) is a
-# snapshot that can no longer prove a live parent. A foreground pane session
-# has session rows only and is never detached. The classification is
-# structural - executable argv shapes via fm_harness_args_is_shared_host -
-# never prompt text. An unresolvable ancestry returns 1 (not detached): the
-# callers below use this to REFUSE extra authority, and the plain
-# cannot-locate-harness refusals already cover the unreadable case.
+# Claude Code config home (jobs/, daemon/roster.json, sessions/). Overridable
+# for tests; defaults to $HOME/.claude. Formats under this tree are
+# version-volatile - every reader below probes defensively and treats
+# absent or unparseable metadata as no evidence, never as authority.
+fm_session_claude_home() {
+  printf '%s\n' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+}
+
+# Print this process's Claude session identity as "<session_id>\t<job_short>".
+# Either field may be empty when only one side is known; both empty is failure.
 #
-# CLAUDE_JOB_DIR is checked first: Claude Code injects it only into
-# background-job sessions, and their hooks and tool shells inherit it, so it
-# stays readable even where the process ancestry cannot be resolved at all -
-# observed on Windows Stop hooks, whose real parent chain is already reaped
-# by the time they run (state/.turnend-guard debugging, 2026-08-14).
+# Sources, in order: CLAUDE_CODE_SESSION_ID, CODEX_COMPANION_SESSION_ID (hook
+# ambient), CLAUDE_JOB_DIR basename as job_short, then Claude's local job state
+# and daemon roster to fill the missing half. Never invents an identity.
+fm_session_claude_identity() {
+  local home sid job state roster
+  home=$(fm_session_claude_home)
+  sid=${CLAUDE_CODE_SESSION_ID:-${CODEX_COMPANION_SESSION_ID:-}}
+  job=
+  if [ -n "${CLAUDE_JOB_DIR:-}" ]; then
+    job=$(basename -- "$CLAUDE_JOB_DIR")
+    case "$job" in ''|.|..) job= ;; esac
+  fi
+  if [ -z "$sid" ] && [ -n "$job" ] && command -v jq >/dev/null 2>&1; then
+    state="$home/jobs/$job/state.json"
+    if [ -f "$state" ]; then
+      sid=$(jq -r '.sessionId // .resumeSessionId // empty' "$state" 2>/dev/null) || sid=
+    fi
+    if [ -z "$sid" ]; then
+      roster="$home/daemon/roster.json"
+      if [ -f "$roster" ]; then
+        sid=$(jq -r --arg j "$job" \
+          '.workers[$j].sessionId // .workers[$j].dispatch.sessionId // empty' \
+          "$roster" 2>/dev/null) || sid=
+      fi
+    fi
+  fi
+  if [ -z "$job" ] && [ -n "$sid" ]; then
+    case "$sid" in
+      [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]-*)
+        job=${sid%%-*}
+        ;;
+    esac
+  fi
+  [ -n "$sid" ] || [ -n "$job" ] || return 1
+  printf '%s\t%s\n' "$sid" "$job"
+}
+
+# Print the daemon roster dispatch.source for job short-id $1 (e.g. spare or
+# fleet), or return 1 when the roster is absent, unreadable, or has no entry.
+# source=fleet is the observed true background-job launch path; source=spare
+# is the interactive/daemon-hosted-attach path. Unparseable → no evidence.
+fm_session_claude_roster_source() {  # <job_short> [<session_id>]
+  local job=$1 sid=${2:-} home roster src rsid
+  [ -n "$job" ] || return 1
+  home=$(fm_session_claude_home)
+  roster="$home/daemon/roster.json"
+  [ -f "$roster" ] || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+  src=$(jq -r --arg j "$job" '.workers[$j].dispatch.source // empty' \
+    "$roster" 2>/dev/null) || return 1
+  [ -n "$src" ] || return 1
+  # Identity consistency: when both this session's id and the roster entry's
+  # are known, a mismatch means the entry describes a DIFFERENT session that
+  # happens to share the job short-id; that is not a positive parse for this
+  # session and must not feed the authorization gate.
+  if [ -n "$sid" ]; then
+    rsid=$(jq -r --arg j "$job" \
+      '.workers[$j].sessionId // .workers[$j].dispatch.sessionId // empty' \
+      "$roster" 2>/dev/null) || rsid=
+    if [ -n "$rsid" ] && [ "$rsid" != "$sid" ]; then
+      return 1
+    fi
+  fi
+  printf '%s\n' "$src"
+}
+
+# Print the registered display name for job short-id $1 from job state or the
+# sessions registry, or return 1. Used only as a last-resort pane binding when
+# herdr has no agent_session id and the attach client's argv carries no id.
+fm_session_claude_job_name() {  # <job_short>
+  local job=$1 home state name f
+  [ -n "$job" ] || return 1
+  home=$(fm_session_claude_home)
+  command -v jq >/dev/null 2>&1 || return 1
+  state="$home/jobs/$job/state.json"
+  if [ -f "$state" ]; then
+    name=$(jq -r '.name // empty' "$state" 2>/dev/null) || name=
+    if [ -n "$name" ]; then
+      printf '%s\n' "$name"
+      return 0
+    fi
+  fi
+  if [ -d "$home/sessions" ]; then
+    for f in "$home/sessions"/*.json; do
+      [ -f "$f" ] || continue
+      name=$(jq -r --arg j "$job" \
+        'select((.jobId // "") == $j) | .name // empty' \
+        "$f" 2>/dev/null) || name=
+      if [ -n "$name" ]; then
+        printf '%s\n' "$name"
+        return 0
+      fi
+    done
+  fi
+  return 1
+}
+
+# True when pid $1 is alive. Tries POSIX kill -0 first, then the Windows-pid
+# harness probe (herdr process-info returns native Windows pids that MSYS kill
+# cannot see). A non-harness live pid on Windows still counts if tasklist sees
+# it - attach clients are harness-named claude.exe so the harness probe is the
+# common path.
+fm_session_pid_alive() {  # <pid>
+  local pid=$1
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  kill -0 "$pid" 2>/dev/null && return 0
+  fm_harness_winpid_alive "$pid" && return 0
+  return 1
+}
+
+# True when this Claude session has LIVE, EXACT herdr pane-attachment proof:
+#   1. HERDR_PANE_ID names a pane that herdr can read right now
+#   2. that pane's foreground client pid is live and is a claude process
+#   3. the pane's attached agent/session identity matches THIS session exactly
+#
+# Identity match (first hit wins):
+#   a. pane.agent_session.value equals this session id or job short-id
+#      (herdr integration report-agent-session; strongest, current binding)
+#   b. the pane foreground argv contains this full session id
+#      (legacy direct-in-pane claude, or an attach client that names the id)
+#   c. pane.agent_session is ABSENT, and the pane's stripped terminal title
+#      equals this job's registered name while we hold both session id and
+#      job short-id - last resort when Claude's herdr integration has not
+#      reported agent_session yet (daemon-hosted attach topology on 2.1.232).
+#      A PRESENT agent_session that disagrees is always a mismatch (refuse),
+#      never falls through to the title fallback.
+#
+# Returns 1 (no proof) on missing herdr/jq, missing identity, dead/gone pane,
+# dead attach pid, non-claude foreground, or any identity mismatch. Callers
+# treat no-proof as fail-closed when hosting evidence is present.
+fm_session_has_live_claude_pane_attachment() {
+  local pane identity sid job pane_json proc_json agent_val title fg_pid fg_cmd
+  local fg_name name title_stripped argv_sid
+  pane=${HERDR_PANE_ID:-}
+  [ -n "$pane" ] || return 1
+  command -v herdr >/dev/null 2>&1 || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+
+  identity=$(fm_session_claude_identity) || return 1
+  IFS=$'\t' read -r sid job <<EOF
+$identity
+EOF
+  [ -n "$sid" ] || [ -n "$job" ] || return 1
+
+  pane_json=$(herdr pane get "$pane" 2>/dev/null) || return 1
+  printf '%s' "$pane_json" | jq -e --arg p "$pane" \
+    '(.result.pane.pane_id // "") == $p' >/dev/null 2>&1 || return 1
+
+  agent_val=$(printf '%s' "$pane_json" | jq -r \
+    '.result.pane.agent_session.value // empty' 2>/dev/null) || agent_val=
+  title=$(printf '%s' "$pane_json" | jq -r \
+    '.result.pane.terminal_title_stripped // .result.pane.terminal_title // empty' \
+    2>/dev/null) || title=
+
+  proc_json=$(herdr pane process-info --pane "$pane" 2>/dev/null) || return 1
+  fg_pid=$(printf '%s' "$proc_json" | jq -r \
+    '.result.process_info.foreground_processes[0].pid // empty' 2>/dev/null) || fg_pid=
+  fg_cmd=$(printf '%s' "$proc_json" | jq -r \
+    '.result.process_info.foreground_processes[0].cmdline // .result.process_info.foreground_processes[0].argv0 // empty' \
+    2>/dev/null) || fg_cmd=
+  fg_name=$(printf '%s' "$proc_json" | jq -r \
+    '.result.process_info.foreground_processes[0].name // empty' 2>/dev/null) || fg_name=
+  case "$fg_pid" in ''|*[!0-9]*) return 1 ;; esac
+  fm_session_pid_alive "$fg_pid" || return 1
+  case "$fg_name $fg_cmd" in
+    *[Cc]laude*) ;;
+    *) return 1 ;;
+  esac
+
+  # An attach argv that explicitly names a session id is definitive evidence
+  # of WHICH session occupies the pane. If it names a different session than
+  # this one, that contradiction refuses outright - even when a (possibly
+  # stale) agent_session record would otherwise match. Contradictory metadata
+  # never authorizes.
+  argv_sid=$(printf '%s\n' "$fg_cmd" | sed -n \
+    's/.*--session-id[= ]\([0-9a-fA-F-]\{36\}\).*/\1/p')
+  if [ -n "$argv_sid" ] && [ -n "$sid" ] && [ "$argv_sid" != "$sid" ]; then
+    return 1
+  fi
+
+  # (a) herdr-reported agent_session: exact match or definitive mismatch.
+  if [ -n "$agent_val" ]; then
+    if [ -n "$sid" ] && [ "$agent_val" = "$sid" ]; then
+      return 0
+    fi
+    if [ -n "$job" ] && [ "$agent_val" = "$job" ]; then
+      return 0
+    fi
+    return 1
+  fi
+
+  # (b) foreground argv carries the full session id.
+  if [ -n "$sid" ]; then
+    case "$fg_cmd" in
+      *"$sid"*) return 0 ;;
+    esac
+  fi
+
+  # (c) title equals registered job name - the weakest tier, kept because
+  # herdr 0.8.0-preview reports agent_session=null for real claude panes
+  # (verified live 2026-08-14 on pane wC:pM), so for current installs this is
+  # the only binding a genuine foreground pane can present. It is allowed
+  # only when NO stronger evidence exists to contradict it: no agent_session
+  # record (handled above) and no session id anywhere in the attach argv -
+  # an argv that names any session id must prove itself via (b), not fall
+  # through to a display-name match. Callers additionally gate this whole
+  # function behind a positively parsed non-fleet roster entry.
+  if [ -n "$argv_sid" ]; then
+    return 1
+  fi
+  if [ -n "$sid" ] && [ -n "$job" ] && [ -n "$title" ]; then
+    name=$(fm_session_claude_job_name "$job") || name=
+    if [ -n "$name" ]; then
+      # Strip leading spinner/status glyphs Claude puts on the OSC title.
+      title_stripped=$title
+      while [ -n "$title_stripped" ]; do
+        case "$title_stripped" in
+          [[:alnum:]]*) break ;;
+          ?*) title_stripped=${title_stripped#?} ;;
+          *) break ;;
+        esac
+      done
+      title_stripped=${title_stripped#"${title_stripped%%[![:space:]]*}"}
+      if [ "$title_stripped" = "$name" ] || [ "$title" = "$name" ]; then
+        return 0
+      fi
+    fi
+  fi
+
+  return 1
+}
+
+# True when the current process runs inside a DETACHED Claude background job
+# that must not take fleet control. Attachment-aware (Claude Code 2.1.232+):
+#
+# Claude now hosts interactive herdr/WezTerm panes as daemon "spare" workers
+# with CLAUDE_JOB_DIR set and a --bg-pty-host ancestry chain - the same shape
+# true background ("fleet") jobs use. CLAUDE_JOB_DIR and --bg-pty-host are
+# therefore evidence of daemon HOSTING only, never proof of detachment.
+#
+# Classification order (fail closed - no new authority on unreadable state):
+#   1. CLAUDE_JOB_DIR present but EMPTY → detached (mangled hosting marker).
+#   2. roster dispatch.source == "fleet" → detached (true background job).
+#   3. roster positively parsed, identity-consistent, source == "spare" AND
+#      live exact herdr pane-attachment proof → NOT detached (foreground),
+#      even when CLAUDE_JOB_DIR is set and ancestry shows --bg-pty-host.
+#      Absent, malformed, missing-entry, inconsistent, or unknown-source
+#      roster data grants NO attachment authority.
+#   4. hosting evidence without that proof (CLAUDE_JOB_DIR set, or ancestry
+#      contains a shared-host row) → detached. Covers Windows Stop hooks
+#      whose parent chain is already reaped: CLAUDE_JOB_DIR survives and,
+#      without a live pane binding, still refuses - same authority as before.
+#   5. no hosting evidence → NOT detached (legacy direct foreground session).
+#
+# An unresolvable ancestry with no CLAUDE_JOB_DIR returns 1 (not detached):
+# callers use this to REFUSE extra authority, and plain cannot-locate-harness
+# refusals already cover the unreadable case. Ambiguous attachment metadata
+# never grants foreground.
 fm_session_is_detached_claude_bg() {
-  local rows pid kind
+  local identity sid job src rows pid kind
+
+  # A present-but-EMPTY CLAUDE_JOB_DIR is a mangled hosting marker, not a
+  # legacy session: something injected the variable and its value was lost.
+  # Ambiguous hosting evidence refuses, it never falls through to legacy.
+  if [ "${CLAUDE_JOB_DIR+x}" = x ] && [ -z "$CLAUDE_JOB_DIR" ]; then
+    return 0
+  fi
+
+  identity=$(fm_session_claude_identity 2>/dev/null) || identity=
+  if [ -n "$identity" ]; then
+    IFS=$'\t' read -r sid job <<EOF
+$identity
+EOF
+    if [ -n "$job" ]; then
+      # Attachment may authorize ONLY behind a positively parsed,
+      # identity-consistent, non-fleet roster entry. Absent, malformed,
+      # missing-entry, inconsistent, or unknown-source roster data is
+      # ambiguity: with hosting evidence in play it refuses below rather
+      # than letting a pane binding speak for a session the daemon does
+      # not positively describe as an interactive spare.
+      if src=$(fm_session_claude_roster_source "$job" "$sid" 2>/dev/null); then
+        case "$src" in
+          fleet)
+            return 0
+            ;;
+          spare)
+            if fm_session_has_live_claude_pane_attachment; then
+              return 1
+            fi
+            ;;
+        esac
+      fi
+    fi
+  fi
+
   [ -n "${CLAUDE_JOB_DIR:-}" ] && return 0
+
   rows=$(fm_harness_ancestry_rows) || return 1
   while IFS=$'\t' read -r pid kind; do
     [ "$kind" = shared-host ] && return 0
@@ -272,16 +560,17 @@ EOF
 
 # Shared spawn preflight: refuse herdr placement from a detached Claude
 # background job BEFORE any worktree, container, or task record exists. Herdr
-# placement needs a live launcher pane, which a daemon-hosted job structurally
-# cannot prove (its HERDR_PANE_ID snapshot predates detachment), so failing
-# here with the real reason beats failing later with a stale-pane read error.
+# placement needs a live launcher pane whose attached session is this one;
+# a true background job (or a daemon-hosted session without live attachment
+# proof) cannot satisfy that, so failing here with the real reason beats
+# failing later with a stale-pane read error.
 # FM_ALLOW_DETACHED_FLEET_CONTROL=1 is the deliberate unattended-supervision
 # override (e.g. away-mode automation on a non-pane backend path).
 fm_session_refuse_detached_herdr_spawn() {  # <backend>
   [ "${1:-}" = herdr ] || return 0
   [ "${FM_ALLOW_DETACHED_FLEET_CONTROL:-0}" = 1 ] && return 0
   fm_session_is_detached_claude_bg || return 0
-  echo "error: this spawn is running inside a detached Claude background job (daemon-hosted harness ancestry); herdr placement is foreground-only - re-issue this request from the foreground Claude pane" >&2
+  echo "error: this spawn is running inside a detached Claude background job; herdr placement is foreground-only - re-issue this request from the foreground Claude pane" >&2
   return 1
 }
 

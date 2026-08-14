@@ -563,6 +563,28 @@ FM_AFK_PI_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
 Observed guarantees: pending composer input refused injection and raised one alert; idle Pi accepted one marked escalation; the return gate refused ordinary work while a live blocker remained; resolving the blocker allowed the return flow.
 The dedicated Herdr daemon workspace topology is covered by `tests/fm-afk-launch.test.sh` and preserves the captain tab's pane count.
 
+### Claude daemon-hosted pane attachment (foreground classification)
+
+Verified 2026-08-14 on Windows 11, Claude Code 2.1.232, Herdr 0.8.0-preview protocol 19.
+`fm_session_is_detached_claude_bg` classifies a session foreground only behind a positively parsed non-fleet roster entry plus a live exact pane attachment; the contract owner is that function's header in `bin/fm-session-lock-lib.sh`.
+
+Observed vendor facts this classification depends on:
+
+| Fact | Observed value |
+| --- | --- |
+| Interactive herdr pane session env | `CLAUDE_JOB_DIR` set, `CLAUDE_CODE_SESSION_ID` set, `--bg-pty-host` ancestry |
+| Daemon roster `dispatch.source` for an interactive pane session | `spare` |
+| Daemon roster `dispatch.source` for a true background job | `fleet` |
+| `herdr pane get <pane>` `agent_session` for a real claude pane | `null` (title tier is the only live binding; see the function header) |
+
+Live classification results from a real daemon-hosted pane session (pane `wC:pM`): attached → foreground; `HERDR_PANE_ID` unset → detached; nonexistent pane id → detached.
+
+Refresh this evidence with the env-gated live guard, which self-skips without the gate and fails naming the claude and herdr versions:
+
+```sh
+FM_LIVE_CLAUDE_ATTACH=1 tests/fm-lock-detached-bg.test.sh
+```
+
 ## Zellij
 
 The current compatibility floor and latest verification are Zellij 0.44.0 with `jq` on macOS aarch64.

@@ -1600,7 +1600,7 @@ fm_backend_herdr_launcher_identity() {  # <session>
     # sources; without it the generic refusal stands unchanged.
     if type fm_session_is_detached_claude_bg >/dev/null 2>&1 \
       && fm_session_is_detached_claude_bg; then
-      echo "error: herdr launcher pane '$pane' could not be read in session '$session', and this process runs inside a detached Claude background job whose pane identity is a stale snapshot; herdr placement is foreground-only - re-issue this request from the foreground Claude pane" >&2
+      echo "error: herdr launcher pane '$pane' could not be read in session '$session', and this process runs inside a detached Claude background job without live pane-attachment proof; herdr placement is foreground-only - re-issue this request from the foreground Claude pane" >&2
     else
       echo "error: herdr launcher pane '$pane' could not be read in session '$session'; refusing to place a worker without its exact parent workspace - if that pane was closed, restart this request from a live herdr pane" >&2
     fi

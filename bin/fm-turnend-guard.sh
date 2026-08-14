@@ -154,7 +154,8 @@ if fm_watcher_healthy "$STATE" "$WATCH" "$GRACE" "$FM_HOME"; then
   exit 2
 fi
 
-# Fleet control is foreground-only: a detached Claude background job that does
+# Fleet control is foreground-only: a detached Claude background job (no live
+# exact pane-attachment proof; see fm_session_is_detached_claude_bg) that does
 # not own this home's lock can never arm or own watcher supervision, so
 # re-blocking its turns cannot produce a watcher - it would just wedge the job.
 # Surface the gap loudly and fail open; supervision belongs to the foreground

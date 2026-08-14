@@ -219,29 +219,21 @@ If no-mistakes spawns agents via npm cmd-shims and mangles `--json-schema`, poin
 
 ## 12. Claude background jobs: fleet control is foreground-only
 
-A Claude session hosted by the background daemon (`claude agents` jobs, `--bg`
-runs — anything whose ancestry contains a `--bg-pty-host` or `daemon run`
-process) is refused the fleet lock and herdr spawns **by design**. Its
-inherited `HERDR_PANE_ID` is a launch-time snapshot that cannot prove a live
-launcher pane, and the daemon keeps the job "live" long after its work is
-done, which is how stuck locks happened before.
+Symptom: a Claude session is refused fleet control with "fleet control is foreground-only" even though you are looking at it in a herdr pane.
+Cause: the session could not prove a live exact pane attachment.
+The classification contract and its exact evidence tiers are owned by the `fm_session_is_detached_claude_bg` header in `bin/fm-session-lock-lib.sh`; this section stays symptom and remediation only.
 
-**Not fixed by** restarting, re-trusting the project, killing the holder pid
-(the daemon respawns it in seconds), or deleting `state/.lock`.
+Not fixed by restarting, re-trusting the project, killing the holder pid (the daemon respawns it in seconds), or deleting `state/.lock`.
 
-**Fix:** run fleet work (spawn / steer / merge / lock ownership) from an
-ordinary foreground `claude` in a live herdr pane. Background jobs still do
-normal repo work read-only. `FM_ALLOW_DETACHED_FLEET_CONTROL=1` is the
-deliberate unattended-supervision override; do not set it to dodge the
-refusal.
-
-Do **not** launch the fleet-controlling session via `claude agents` — its
-prompts run in hidden daemon sessions even when its dashboard is the only
-visible pane. Use plain `claude` in the pane instead.
+Fix: run fleet work (spawn / steer / merge / lock ownership) from the Claude session attached to a live herdr pane; plain `claude` in the pane is fine even when daemon-hosted.
+Background jobs still do normal repo work read-only.
+`FM_ALLOW_DETACHED_FLEET_CONTROL=1` is the deliberate unattended-supervision override; do not set it to dodge the refusal.
+Do not launch the fleet-controlling session via `claude agents` - its prompts run as roster `source:"fleet"` jobs even when a dashboard is visible.
+Use plain `claude` in the pane instead.
 
 ---
 
-## 12. Collecting a support bundle (no secrets)
+## 13. Collecting a support bundle (no secrets)
 
 ```sh
 cd /path/to/PODLES-agent-workspace
