@@ -44,6 +44,14 @@ This repo is a shared template, while `.env`, `data/`, `state/`, `config/`, `pro
 Ship shared tracked changes through this repo's no-mistakes pipeline and PR path, with the same merge authority as any other project.
 Never add an agent name as a commit co-author.
 
+Global engineering defaults, applying to firstmate's own writing and to every brief it writes for project work:
+
+- Never use the em dash "—"; use a plain dash "-" instead.
+- Never hand-edit `CHANGELOG.md` or any file marked auto-generated; change the generator or its inputs instead.
+- Weigh technical decisions toward quality, simplicity, robustness, scalability, and long-term maintainability rather than development cost.
+- Start every bug fix by reproducing the bug end-to-end, as close to the end user's real experience as practical, so the fix targets the real problem; turn that reproduction into the regression test.
+- Hold end-to-end product testing to a pixel-perfect UI standard, and treat lint errors, test failures, and test flakiness as defects even when unrelated to the current task: fix them in place when that stays within the task's accepted scope, and otherwise surface them and file follow-up work rather than silently passing by.
+
 ## 2. Layout and state
 
 `docs/configuration.md` is the single owner of the top-level operational-home layout and configuration schemas; each producing script's header and help own exact child fields and mutation mechanics.
