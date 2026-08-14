@@ -252,8 +252,15 @@ fm_harness_ancestry_rows() {
 # never prompt text. An unresolvable ancestry returns 1 (not detached): the
 # callers below use this to REFUSE extra authority, and the plain
 # cannot-locate-harness refusals already cover the unreadable case.
+#
+# CLAUDE_JOB_DIR is checked first: Claude Code injects it only into
+# background-job sessions, and their hooks and tool shells inherit it, so it
+# stays readable even where the process ancestry cannot be resolved at all -
+# observed on Windows Stop hooks, whose real parent chain is already reaped
+# by the time they run (state/.turnend-guard debugging, 2026-08-14).
 fm_session_is_detached_claude_bg() {
   local rows pid kind
+  [ -n "${CLAUDE_JOB_DIR:-}" ] && return 0
   rows=$(fm_harness_ancestry_rows) || return 1
   while IFS=$'\t' read -r pid kind; do
     [ "$kind" = shared-host ] && return 0

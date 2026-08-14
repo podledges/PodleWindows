@@ -115,6 +115,7 @@ install_guard_scripts() {
   cp "$ROOT/bin/fm-primary-scope-lib.sh" "$dir/bin/fm-primary-scope-lib.sh"
   cp "$ROOT/bin/fm-supervision-lib.sh" "$dir/bin/fm-supervision-lib.sh"
   cp "$ROOT/bin/fm-wake-lib.sh" "$dir/bin/fm-wake-lib.sh"
+  cp "$ROOT/bin/fm-session-lock-lib.sh" "$dir/bin/fm-session-lock-lib.sh"
   mkdir -p "$dir/docs"
   cp -R "$ROOT/docs/supervision-protocols" "$dir/docs/supervision-protocols"
   chmod +x "$dir/bin/fm-turnend-guard.sh" "$dir/bin/fm-turnend-guard-grok.sh" "$dir/bin/fm-operational-input.sh" "$dir/bin/fm-supervision-instructions.sh" "$dir/bin/fm-harness.sh"
@@ -191,7 +192,12 @@ make_secondmate_linked_home_dir() {
 run_hook() {
   local dir=$1 stop_active=$2 home
   home=$(cd "$dir" && pwd)
-  printf '{"stop_hook_active":%s}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1
+  # FM_ALLOW_DETACHED_FLEET_CONTROL pins the classic duty path regardless of
+  # the ancestry the suite itself happens to run under: a detached Claude host
+  # would otherwise trip the foreground-only carve-out (tested on its own with
+  # a deterministic fake ps below) and turn every block scenario into a no-op.
+  printf '{"stop_hook_active":%s}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" \
+    FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard.sh" 2>&1
 }
 
 nonexistent_pid() {
@@ -368,7 +374,7 @@ test_hook_blocks_from_fm_home_state() {
   home="$TMP_ROOT/hook-fm-home-op"
   mkdir -p "$home/state"
   : > "$home/state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 FM_HOME="$home" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 2 "$status" "hook must inspect the active FM_HOME state dir"
   assert_contains "$out" "$REQUIRED_REASON" "block reason must contain the exact required instruction"
   pass "fm-turnend-guard: blocks from active FM_HOME state, not only repo-root state"
@@ -416,7 +422,7 @@ test_hook_uses_state_override() {
   state="$TMP_ROOT/hook-state-override-active"
   mkdir -p "$home/state" "$state"
   : > "$state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 FM_HOME="$home" FM_STATE_OVERRIDE="$state" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  out=$(printf '{"stop_hook_active":false}' | CLAUDECODE=1 FM_HOME="$home" FM_STATE_OVERRIDE="$state" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 2 "$status" "hook must let FM_STATE_OVERRIDE win over FM_HOME/state"
   assert_contains "$out" "$REQUIRED_REASON" "block reason must contain the exact required instruction"
   pass "fm-turnend-guard: uses FM_STATE_OVERRIDE ahead of FM_HOME/state"
@@ -653,7 +659,7 @@ test_grok_adapter_forces_one_resume_when_unhealthy() {
 } >> "$log"
 EOF
   chmod +x "$fakebin/grok"
-  out=$(printf '{"sessionId":"session-test","hookEventName":"stop"}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '{"sessionId":"session-test","hookEventName":"stop"}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 0 "$status" "grok adapter must fail open after queuing a forced resume"
   [ -z "$out" ] || fail "grok adapter printed output: $out"
   assert_contains "$(cat "$log")" 'active=1' "grok adapter must mark its forced resume as loop-guarded"
@@ -676,7 +682,7 @@ test_grok_adapter_loop_guard_skips_resume() {
 printf 'called\n' >> "$log"
 EOF
   chmod +x "$fakebin/grok"
-  out=$(printf '{"sessionId":"session-test","hookEventName":"stop"}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" GROK_TURNEND_GUARD_ACTIVE=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '{"sessionId":"session-test","hookEventName":"stop"}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" GROK_TURNEND_GUARD_ACTIVE=1 FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 0 "$status" "grok adapter must allow its own forced resume turn to end"
   [ -z "$out" ] || fail "grok adapter printed output while loop-guarded: $out"
   [ ! -e "$log" ] || fail "grok adapter spawned another resume while loop-guarded: $(cat "$log")"
@@ -691,7 +697,7 @@ test_grok_adapter_native_false_blocks_without_resume() {
   log="$TMP_ROOT/grok-native-false.log"
   printf '#!/usr/bin/env bash\nprintf called >> %q\n' "$log" > "$fakebin/grok"
   chmod +x "$fakebin/grok"
-  out=$(printf '%s' '{"sessionId":"native","stopHookActive":false}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '%s' '{"sessionId":"native","stopHookActive":false}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 2 "$status" "native stopHookActive=false must return the shared blocking status"
   assert_contains "$out" 'TURN WOULD END BLIND' "native block must pass shared guard feedback to Grok"
   [ ! -e "$log" ] || fail "native path started grok --resume"
@@ -706,7 +712,7 @@ test_grok_adapter_native_true_allows_without_resume() {
   log="$TMP_ROOT/grok-native-true.log"
   printf '#!/usr/bin/env bash\nprintf called >> %q\n' "$log" > "$fakebin/grok"
   chmod +x "$fakebin/grok"
-  out=$(printf '%s' '{"sessionId":"native","stopHookActive":true}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '%s' '{"sessionId":"native","stopHookActive":true}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 0 "$status" "native stopHookActive=true must allow the bounded continuation to stop"
   [ -z "$out" ] || fail "native true produced output: $out"
   [ ! -e "$log" ] || fail "native true started grok --resume"
@@ -717,12 +723,12 @@ test_grok_adapter_snake_case_native_and_camel_precedence() {
   local dir out status
   dir=$(make_primary_dir "$TMP_ROOT/grok-native-spellings")
   : > "$dir/state/task1.meta"
-  out=$(printf '%s' '{"sessionId":"native","stop_hook_active":false}' | GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '%s' '{"sessionId":"native","stop_hook_active":false}' | GROK_WORKSPACE_ROOT="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 2 "$status" "typed snake_case false must select native blocking"
   assert_contains "$out" 'TURN WOULD END BLIND' "snake_case native block lost feedback"
-  out=$(printf '%s' '{"sessionId":"native","stopHookActive":true,"stop_hook_active":false}' | GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '%s' '{"sessionId":"native","stopHookActive":true,"stop_hook_active":false}' | GROK_WORKSPACE_ROOT="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 0 "$status" "camelCase true must win over snake_case false"
-  out=$(printf '%s' '{"sessionId":"native","stopHookActive":false,"stop_hook_active":true}' | GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '%s' '{"sessionId":"native","stopHookActive":false,"stop_hook_active":true}' | GROK_WORKSPACE_ROOT="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 2 "$status" "camelCase false must win over snake_case true"
   pass "fm-turnend-guard-grok: both spellings are typed and camelCase has deterministic precedence"
 }
@@ -746,7 +752,7 @@ test_grok_adapter_invalid_inputs_start_neither_path() {
     '{"sessionId":"x","stop_hook_active":false,"stop_hook_active":false}' \
     '{"sessionId":"x","sessionId":"y"}'
   do
-    out=$(printf '%s' "$payload" | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+    out=$(printf '%s' "$payload" | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
     expect_code 0 "$status" "invalid Grok payload must conservatively allow without choosing a path"
     [ -z "$out" ] || fail "invalid Grok payload produced output: $out"
   done
@@ -770,13 +776,13 @@ test_grok_adapter_missing_jq_and_no_supervision_allow() {
   done
   printf '#!/usr/bin/env bash\nprintf called >> %q\n' "$log" > "$fakebin/grok"
   chmod +x "$fakebin/grok"
-  out=$(printf '%s' '{"sessionId":"x","stopHookActive":false}' | PATH="$fakebin" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '%s' '{"sessionId":"x","stopHookActive":false}' | PATH="$fakebin" GROK_WORKSPACE_ROOT="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 0 "$status" "missing jq must conservatively allow"
   [ -z "$out" ] || fail "missing jq produced output: $out"
   [ ! -e "$log" ] || fail "missing jq started a resume process"
 
   dir=$(make_primary_dir "$TMP_ROOT/grok-native-no-work")
-  out=$(printf '%s' '{"sessionId":"x","stopHookActive":false}' | GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
+  out=$(printf '%s' '{"sessionId":"x","stopHookActive":false}' | GROK_WORKSPACE_ROOT="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
   expect_code 0 "$status" "healthy no-supervision-needed native stop must allow"
   [ -z "$out" ] || fail "no-supervision-needed native stop produced output: $out"
   pass "fm-turnend-guard-grok: missing jq and no-supervision-needed stops stay silent and bounded"
@@ -1031,7 +1037,10 @@ EOF
 run_hook_claude() {
   local dir=$1 stop_active=$2 home
   home=$(cd "$dir" && pwd)
-  printf '{"stop_hook_active":%s,"session_id":"sess-claude-mode"}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" --claude 2>&1
+  # Same host-ancestry pin as run_hook: the foreground-only carve-out gets its
+  # own deterministic fake-ps test instead.
+  printf '{"stop_hook_active":%s,"session_id":"sess-claude-mode"}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" \
+    FM_ALLOW_DETACHED_FLEET_CONTROL=1 bash "$dir/bin/fm-turnend-guard.sh" --claude 2>&1
 }
 
 seed_claude_failure() {
@@ -1070,7 +1079,7 @@ run_integrated_autoarm() {
   home=$(cd "$dir" && pwd)
   # shellcheck disable=SC2016 # the fake harness expands FM_HOME inside its child shell.
   printf '{"session_id":"sess-claude-mode","stop_hook_active":false}\n' \
-    | FM_HOME="$home" "$dir/fake-claude" -c '
+    | FM_HOME="$home" FM_ALLOW_DETACHED_FLEET_CONTROL=1 "$dir/fake-claude" -c '
         printf "%s\n" "$$" > "$FM_HOME/state/.lock"
         "$FM_HOME/bin/fm-claude-stop-autoarm.sh"
       ' 2>&1
@@ -1089,6 +1098,60 @@ SH
 # The 2026-07-21 incident regression: after a spent forced continuation the old
 # one-shot loop guard ALLOWED a blind stop (stop_hook_active=true) while the
 # watcher was already dead. In --claude mode the guard must re-block instead.
+# Fleet control is foreground-only: a detached Claude background job that does
+# not own the home's lock can never arm supervision, so the guard must surface
+# the gap and fail open instead of re-blocking that job forever. The detached
+# ancestry is deterministic: a fake ps maps this process under a session (700)
+# hosted by a pty host (800) under the shared daemon (600).
+test_hook_detached_bg_job_fails_open_with_notice() {
+  local dir fakebin out status
+  dir=$(make_primary_dir "$TMP_ROOT/hook-detached-bg")
+  : > "$dir/state/task1.meta"
+  fakebin=$(fm_fakebin "$TMP_ROOT/hook-detached-bg-ps")
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+field= pid=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) field=$2; shift 2 ;;
+    -p) pid=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+case "$pid:$field" in
+  700:comm=) printf '%s\n' claude ;;
+  700:args=) printf '%s\n' 'claude --session-id abc123 --agent claude' ;;
+  700:ppid=) printf '%s\n' 800 ;;
+  800:comm=) printf '%s\n' claude ;;
+  800:args=) printf '%s\n' 'claude --bg-pty-host pipe 49 37 -- claude' ;;
+  800:ppid=) printf '%s\n' 600 ;;
+  600:comm=) printf '%s\n' claude ;;
+  600:args=) printf '%s\n' 'claude daemon run --origin transient' ;;
+  600:ppid=) printf '%s\n' 1 ;;
+  *:comm=) printf '%s\n' bash ;;
+  *:args=) printf '%s\n' bash ;;
+  *:ppid=) printf '%s\n' 700 ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+  out=$(printf '{"stop_hook_active":false,"session_id":"sess-detached"}' \
+    | CLAUDECODE=1 FM_HOME="$dir" PATH="$fakebin:$PATH" \
+      bash "$dir/bin/fm-turnend-guard.sh" --claude 2>&1); status=$?
+  expect_code 0 "$status" "a detached non-owning bg job must fail open, not re-block forever"
+  assert_contains "$out" "fleet control is foreground-only" \
+    "the fail-open notice must name the foreground-only rule"
+  # A lock held INSIDE this ancestry keeps the full duty path: the same
+  # detached shape re-blocks like any owning session would.
+  printf '700\n' > "$dir/state/.lock"
+  out=$(printf '{"stop_hook_active":false,"session_id":"sess-detached"}' \
+    | CLAUDECODE=1 FM_HOME="$dir" PATH="$fakebin:$PATH" FM_CLAUDE_AUTOARM_SYNC_WAIT_MS=200 \
+      bash "$dir/bin/fm-turnend-guard.sh" --claude 2>&1); status=$?
+  expect_code 2 "$status" "a lock-owning detached session must keep the full duty path"
+  assert_contains "$out" "TURN WOULD END BLIND" "the owning duty path lost its blind-turn banner"
+  pass "fm-turnend-guard --claude: a detached non-owning bg job fails open with a foreground-only notice"
+}
+
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy() {
   local dir out status
   dir=$(make_primary_dir "$TMP_ROOT/hook-claude-reblock")
@@ -1206,7 +1269,8 @@ SH
         FM_TERMINAL_READY="$ready" \
         FM_TERMINAL_RELEASE="$release" \
         FM_TERMINAL_ONCE="$once" \
-        CLAUDECODE=1 FM_HOME="$dir" bash "$dir/bin/fm-turnend-guard.sh" --claude \
+        CLAUDECODE=1 FM_HOME="$dir" FM_ALLOW_DETACHED_FLEET_CONTROL=1 \
+          bash "$dir/bin/fm-turnend-guard.sh" --claude \
           > "$guard_out" 2>&1
     printf '%s\n' "$?" > "$guard_status"
   ) &
@@ -1582,6 +1646,7 @@ test_codex_hook_ignores_nested_git_root_guard
 test_opencode_plugin_anchors_guard_to_worktree
 test_pi_extension_injects_once_per_logical_agent_run
 test_pi_extension_retries_after_followup_delivery_failure
+test_hook_detached_bg_job_fails_open_with_notice
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
 test_hook_claude_mode_reblocks_x_mode_without_tasks
 test_hook_claude_mode_allows_when_autoarm_owner_alive

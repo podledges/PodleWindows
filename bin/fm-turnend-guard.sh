@@ -86,6 +86,8 @@ done
 . "$SCRIPT_DIR/fm-supervision-lib.sh"
 # shellcheck source=bin/fm-primary-scope-lib.sh
 . "$SCRIPT_DIR/fm-primary-scope-lib.sh"
+# shellcheck source=bin/fm-session-lock-lib.sh
+. "$SCRIPT_DIR/fm-session-lock-lib.sh"
 
 # Read the whole turn-end hook payload once; never block on unreadable/absent
 # stdin.
@@ -150,6 +152,24 @@ if fm_watcher_healthy "$STATE" "$WATCH" "$GRACE" "$FM_HOME"; then
   [ "$CLAUDE_MODE" -eq 1 ] || exit 0
   fm_failure_episode_reset "$STATE" && exit 0
   exit 2
+fi
+
+# Fleet control is foreground-only: a detached Claude background job that does
+# not own this home's lock can never arm or own watcher supervision, so
+# re-blocking its turns cannot produce a watcher - it would just wedge the job.
+# Surface the gap loudly and fail open; supervision belongs to the foreground
+# pane session (setup/DEBUG.md section 12). A detached job that still owns the
+# lock keeps the full duty path below, and so does the deliberate
+# FM_ALLOW_DETACHED_FLEET_CONTROL override: a session allowed to take fleet
+# control is also expected to carry fleet supervision duty.
+if [ "${FM_ALLOW_DETACHED_FLEET_CONTROL:-0}" != 1 ] \
+  && fm_session_is_detached_claude_bg && ! fm_session_lock_owned_by_self "$STATE"; then
+  if [ "$CLAUDE_MODE" -eq 1 ]; then
+    printf '{"systemMessage":"Supervision is down (%s task(s) in flight), and this detached Claude background job cannot own it: fleet control is foreground-only. Resume supervision from a foreground Claude pane session."}\n' "$FM_SUP_IN_FLIGHT"
+  else
+    echo "supervision is down, and this detached background job cannot own it (fleet control is foreground-only); resume supervision from a foreground pane session" >&2
+  fi
+  exit 0
 fi
 
 block_stop() {

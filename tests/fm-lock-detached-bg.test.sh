@@ -20,9 +20,12 @@ TMP_ROOT=$(fm_test_tmproot fm-lock-detached-bg)
 LIB="$ROOT/bin/fm-session-lock-lib.sh"
 
 # Run one library expression behind fake process table <fakebin>.
+# CLAUDE_JOB_DIR is cleared so the classifier's env short-cut never shadows the
+# ancestry shape under test - this suite itself may run inside a background
+# job. The env marker gets its own explicit test below.
 lib_eval() {  # <fakebin> <expression>
   local fakebin=$1 expr=$2
-  PATH="$fakebin:$PATH" bash -c "
+  CLAUDE_JOB_DIR= PATH="$fakebin:$PATH" bash -c "
     . \"\$0\"
     kill() { return 0; }
     $expr
@@ -110,7 +113,7 @@ test_detached_acquire_is_refused_and_foreground_acquires() {
   dir="$TMP_ROOT/acquire-detached"
   fakebin=$(make_detached_fakebin "$dir")
   mkdir -p "$dir/state"
-  out=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" "$ROOT/bin/fm-lock.sh" 2>&1)
+  out=$(CLAUDE_JOB_DIR= PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" "$ROOT/bin/fm-lock.sh" 2>&1)
   rc=$?
   expect_code 1 "$rc" "a detached background job must be refused fleet control"
   assert_contains "$out" "fleet control is foreground-only" \
@@ -122,7 +125,7 @@ test_detached_acquire_is_refused_and_foreground_acquires() {
   dir="$TMP_ROOT/acquire-foreground"
   fakebin=$(make_foreground_fakebin "$dir")
   mkdir -p "$dir/state"
-  out=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" "$ROOT/bin/fm-lock.sh" 2>&1)
+  out=$(CLAUDE_JOB_DIR= PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" "$ROOT/bin/fm-lock.sh" 2>&1)
   rc=$?
   expect_code 0 "$rc" "a foreground pane session must still acquire normally"
   [ "$(tr -d '[:space:]' < "$dir/state/.lock")" = 700 ] \
@@ -135,7 +138,7 @@ test_override_still_records_the_session_pid() {
   dir="$TMP_ROOT/acquire-override"
   fakebin=$(make_detached_fakebin "$dir")
   mkdir -p "$dir/state"
-  PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" FM_ALLOW_DETACHED_FLEET_CONTROL=1 \
+  CLAUDE_JOB_DIR= PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" FM_ALLOW_DETACHED_FLEET_CONTROL=1 \
     "$ROOT/bin/fm-lock.sh" >/dev/null 2>&1
   rc=$?
   expect_code 0 "$rc" "the deliberate override must let a detached job acquire"
@@ -161,7 +164,30 @@ test_spawn_preflight_is_herdr_only_and_overridable() {
   pass "detached-bg: the spawn preflight refuses only detached herdr placement"
 }
 
+# The CLAUDE_JOB_DIR env marker must classify on its own: Stop hooks on
+# Windows cannot resolve their process ancestry at all (the real parent chain
+# is reaped before the hook runs), and the injected job dir is the evidence
+# that survives into hook and tool environments.
+test_env_marker_classifies_without_ancestry() {
+  local foreground dir out rc
+  foreground=$(make_foreground_fakebin "$TMP_ROOT/env-marker")
+  CLAUDE_JOB_DIR=/x PATH="$foreground:$PATH" bash -c '
+    . "$0"
+    kill() { return 0; }
+    fm_session_is_detached_claude_bg
+  ' "$LIB" || fail "CLAUDE_JOB_DIR did not classify a background job on its own"
+  dir="$TMP_ROOT/env-marker-acquire"
+  mkdir -p "$dir/state"
+  out=$(CLAUDE_JOB_DIR=/x PATH="$foreground:$PATH" FM_STATE_OVERRIDE="$dir/state" "$ROOT/bin/fm-lock.sh" 2>&1)
+  rc=$?
+  expect_code 1 "$rc" "a CLAUDE_JOB_DIR session must be refused fleet control"
+  assert_contains "$out" "fleet control is foreground-only" \
+    "the env-marker refusal lost the foreground-only rule"
+  pass "detached-bg: CLAUDE_JOB_DIR classifies a background job even with unreadable ancestry"
+}
+
 test_classifier_tells_detached_from_foreground
 test_detached_acquire_is_refused_and_foreground_acquires
 test_override_still_records_the_session_pid
 test_spawn_preflight_is_herdr_only_and_overridable
+test_env_marker_classifies_without_ancestry

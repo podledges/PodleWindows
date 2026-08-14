@@ -377,7 +377,10 @@ SH
   chmod +x "$fakebin/ps"
   printf '%s\n' "$live" > "$dir/state/.lock"
 
-  out=$(PATH="$fakebin:$PATH" FM_TEST_DAEMON_PID="$live" FM_STATE_OVERRIDE="$dir/state" \
+  # CLAUDE_JOB_DIR is cleared so the classifier's background-job env marker
+  # (this suite may itself run inside one) cannot preempt the live-holder
+  # refusal this test exists to read.
+  out=$(CLAUDE_JOB_DIR= PATH="$fakebin:$PATH" FM_TEST_DAEMON_PID="$live" FM_STATE_OVERRIDE="$dir/state" \
     "$ROOT/bin/fm-lock.sh" 2>&1)
   rc=$?
   expect_code 1 "$rc" "a live holder must still refuse the acquire"
@@ -385,7 +388,7 @@ SH
   assert_contains "$out" "holder: claude -- claude daemon run" "the refusal did not describe the holder process"
   assert_contains "$out" "shared background-session daemon" "the refusal did not name the daemon-held legacy case"
 
-  out=$(PATH="$fakebin:$PATH" FM_TEST_DAEMON_PID="$live" FM_STATE_OVERRIDE="$dir/state" \
+  out=$(CLAUDE_JOB_DIR= PATH="$fakebin:$PATH" FM_TEST_DAEMON_PID="$live" FM_STATE_OVERRIDE="$dir/state" \
     "$ROOT/bin/fm-lock.sh" status 2>&1) || fail "status must always exit 0"
   kill "$live" 2>/dev/null
   assert_contains "$out" "lock: held by live harness pid" "status lost its holder line"
